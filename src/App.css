@@ -1,0 +1,6 @@
+:root {
+  --primary: #6a1b9a;
+  --secondary: #ffab00;
+  --success: #00c853;
+  --card-shadow: 0 3px 10px rgba(0,0,0,0.1);
+}
