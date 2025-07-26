@@ -1,12 +1,44 @@
-import { Box, Stepper, Step, StepLabel, Button, Typography, Paper, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
+import { 
+  Box, 
+  Stepper, 
+  Step, 
+  StepLabel, 
+  Button, 
+  Typography, 
+  Paper, 
+  Dialog, 
+  DialogActions, 
+  DialogContent, 
+  DialogTitle,
+  Chip 
+} from "@mui/material";
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
 import { useState } from "react";
 
 const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
   const [activeStep, setActiveStep] = useState(pet.serviceProgress || 0);
   const [openDialog, setOpenDialog] = useState(false);
   
-  const steps = ['Banho', 'Secagem', 'Tosa', 'Finalizado'];
+  // Definindo os steps baseados no tipo de serviço
+  const getSteps = () => {
+    switch(pet.serviceType) {
+      case 'Banho':
+        return ['Banho', 'Secagem', 'Finalização'];
+      case 'Banho e Tosa':
+        return ['Banho', 'Secagem', 'Tosa Completa', 'Finalização'];
+      case 'Tosa Higiênica':
+        return ['Banho', 'Secagem', 'Tosa Higiênica', 'Finalização'];
+      case 'Tosa Completa':
+        return ['Banho', 'Secagem', 'Tosa Completa', 'Finalização'];
+      case 'Plano Mensal':
+        return ['Banho', 'Secagem', 'Finalização'];
+      default:
+        return ['Banho', 'Secagem', 'Finalização'];
+    }
+  };
+
+  const steps = getSteps();
 
   const handleNext = () => {
     const newStep = activeStep + 1;
@@ -15,16 +47,16 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
     if (newStep === steps.length - 1) {
       setOpenDialog(true);
     } else {
-      onNextStep(pet.id, newStep);
+      onNextStep?.(pet.id, newStep);
     }
   };
 
   const handleComplete = () => {
-    onComplete(pet.id);
+    onComplete?.(pet.id);
     setOpenDialog(false);
   };
 
-  const isMothlyPlan = pet.serviceType === "Plano Mensal";
+  const isMonthlyPlan = pet.serviceType === "Plano Mensal";
   const bathsRemaining = pet.monthlyBathsRemaining || 0;
 
   return (
@@ -36,13 +68,13 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
         Serviço: {pet.serviceType || 'Banho/Tosa'}
       </Typography>
 
-      {isMothlyPlan && (
-        <Box sx={{ mb:2 }}>
+      {isMonthlyPlan && (
+        <Box sx={{ mb: 2 }}>
           <Chip
             label={
               bathsRemaining > 0
-              ? `Banhos restantes: ${bathsRemaining}`
-              : "Renove o plano mensal!"
+                ? `Banhos restantes: ${bathsRemaining}`
+                : "Renove o plano mensal!"
             }
             color={bathsRemaining > 0 ? "primary" : "warning"}
             icon={bathsRemaining > 0 ? null : <WarningIcon />}
@@ -88,7 +120,7 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
           <Typography>
             Confirmar que o serviço para {pet.name} foi concluído com sucesso?
           </Typography>
-          {isMothlyPlan && bathsRemaining === 0 && (
+          {isMonthlyPlan && bathsRemaining === 0 && (
             <Typography color="warning.main" sx={{ mt: 2 }}>
               <WarningIcon fontSize="small" /> Este pet não tem mais banhos disponíveis no plano mensal.
             </Typography>

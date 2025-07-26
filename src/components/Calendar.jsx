@@ -1,24 +1,25 @@
 import { useState, useContext } from "react";
 import { PetsContext } from "../contexts/PetsContext";
-import { 
+import {
   Box, Typography, Paper, Chip, Grid,
   Tabs, Tab, Divider, Button, ButtonGroup,
   Dialog, DialogTitle, DialogContent, DialogActions,
   Avatar, useTheme, Badge
 } from "@mui/material";
-import { 
-  format, isSameDay, isSameWeek, isSameMonth, 
-  parseISO, eachDayOfInterval, startOfWeek, 
+import {
+  format, isSameDay, isSameWeek, isSameMonth,
+  parseISO, eachDayOfInterval, startOfWeek,
   endOfWeek, startOfMonth, endOfMonth, addDays,
-  isToday, isWeekend
+  isToday, isWeekend, addMinutes
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import EventIcon from '@mui/icons-material/Event';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 const Calendar = () => {
-  const { pets, startService, completeService } = useContext(PetsContext);
+  const { pets, startService, completeService, updatePetSchedule } = useContext(PetsContext);
   const [viewMode, setViewMode] = useState('day');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedPet, setSelectedPet] = useState(null);
@@ -27,21 +28,21 @@ const Calendar = () => {
 
   // Cores para status
   const statusColors = {
-    'pending': theme.palette.warning.main,    // Agendado
-    'inProgress': theme.palette.info.main,   // Em andamento
-    'completed': theme.palette.success.main, // Finalizado
-    'default': theme.palette.error.main      // Padrão
+    'pending': '#ff9900ff',    // Agendado
+    'inProgress': '#29cf98ff', // Em andamento
+    'completed': '#439104ff',  // Finalizado
+    'default': '#ff0055ff'     // Padrão
   };
 
   // Cores para tipos de serviço
   const serviceColors = {
-    'Banho Completo': theme.palette.secondary.main,
-    'Banho e Tosa': theme.palette.primary.main,
-    'Tosa Higiênica': theme.palette.error.light,
-    'Tosa Completa': theme.palette.warning.light,
-    'Plano Mensal': theme.palette.info.main,
-    'Banho': theme.palette.success.light,
-    'Outros': theme.palette.grey[500]
+    'Banho Completo': '#FF2D75',
+    'Banho e Tosa': '#00F0FF',
+    'Tosa Higiênica': '#e73434ff',
+    'Tosa Completa': '#ffd700ff',
+    'Plano Mensal': '#4671ffff',
+    'Banho': '#8e24aa',
+    'Outros': '#8fe99bff'
   };
 
   const normalizeDate = (date) => {
@@ -60,8 +61,8 @@ const Calendar = () => {
   const filteredPets = pets.filter(pet => {
     const petDate = normalizeDate(pet.scheduleDate);
     if (!petDate) return false;
-    
-    switch(viewMode) {
+
+    switch (viewMode) {
       case 'day': return isSameDay(petDate, selectedDate);
       case 'week': return isSameWeek(petDate, selectedDate, { weekStartsOn: 1 });
       case 'month': return isSameMonth(petDate, selectedDate);
@@ -75,7 +76,7 @@ const Calendar = () => {
     filteredPets.forEach(pet => {
       const petDate = normalizeDate(pet.scheduleDate);
       if (!petDate) return;
-      
+
       const timeKey = format(petDate, 'HH:mm');
       if (!grouped[timeKey]) grouped[timeKey] = [];
       grouped[timeKey].push(pet);
@@ -104,7 +105,7 @@ const Calendar = () => {
   // Navegação entre datas
   const navigateDate = (direction) => {
     const newDate = new Date(selectedDate);
-    
+
     if (viewMode === 'day') {
       newDate.setDate(newDate.getDate() + direction);
     } else if (viewMode === 'week') {
@@ -112,7 +113,7 @@ const Calendar = () => {
     } else if (viewMode === 'month') {
       newDate.setMonth(newDate.getMonth() + direction);
     }
-    
+
     setSelectedDate(newDate);
   };
 
@@ -137,7 +138,7 @@ const Calendar = () => {
   };
 
   // Renderiza um card de pet
-  const renderPetCard = (pet) => {
+  const renderPetCard = (pet, index) => {
     const status = getPetStatus(pet);
     const statusText = {
       'pending': 'Agendado',
@@ -146,243 +147,161 @@ const Calendar = () => {
     }[status];
 
     return (
-      <Paper 
-        key={pet.id} 
-        onClick={() => handlePetClick(pet)}
-        sx={{ 
-          p: 2, 
-          flex: 1,
-          minWidth: 200,
-          borderLeft: `4px solid ${statusColors[status]}`,
-          boxShadow: 2,
-          cursor: 'pointer',
-          transition: 'transform 0.2s, box-shadow 0.2s',
-          '&:hover': { 
-            transform: 'translateY(-2px)',
-            boxShadow: 4
-          }
-        }}
-      >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="subtitle1" fontWeight="bold">
-            {pet.name}
-          </Typography>
-          <Chip
-            label={statusText}
-            size="small"
-            sx={{ 
-              backgroundColor: statusColors[status],
-              color: 'white',
-              fontWeight: 'bold',
-              textTransform: 'uppercase'
+      <Draggable key={pet.id} draggableId={pet.id} index={index}>
+        {(provided) => (
+          <Paper
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            onClick={() => handlePetClick(pet)}
+            sx={{
+              p: 2,
+              mb: 2,
+              borderLeft: `4px solid ${statusColors[status]}`,
+              boxShadow: 2,
+              cursor: 'pointer',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: 4
+              }
             }}
-          />
-        </Box>
-        
-        <Typography variant="body2" color="text.secondary">
-          {pet.owner}
-        </Typography>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 1 }}>
-          <Chip
-            label={pet.serviceType || 'Serviço'}
-            size="small"
-            sx={{ 
-              backgroundColor: serviceColors[pet.serviceType] || serviceColors['Outros'],
-              color: 'white',
-              fontWeight: 'bold'
-            }}
-          />
-          {status === 'completed' && (
-            <CheckCircleIcon sx={{ color: statusColors.completed }} />
-          )}
-          {status === 'inProgress' && (
-            <PlayCircleOutlineIcon sx={{ color: statusColors.inProgress }} />
-          )}
-        </Box>
-        
-        {pet.observations && (
-          <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-            {pet.observations}
-          </Typography>
+          >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle1" fontWeight="bold">
+                {pet.name}
+              </Typography>
+              <Chip
+                label={statusText}
+                size="small"
+                sx={{
+                  backgroundColor: statusColors[status],
+                  color: 'white',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase'
+                }}
+              />
+            </Box>
+            
+            <Typography variant="body2" color="text.secondary">
+              {pet.owner}
+            </Typography>
+            
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 1 }}>
+              <Chip
+                label={pet.serviceType || 'Serviço'}
+                size="small"
+                sx={{ 
+                  backgroundColor: serviceColors[pet.serviceType] || serviceColors['Outros'],
+                  color: 'white',
+                  fontWeight: 'bold'
+                }}
+              />
+              {status === 'completed' && (
+                <CheckCircleIcon sx={{ color: statusColors.completed }} />
+              )}
+              {status === 'inProgress' && (
+                <PlayCircleOutlineIcon sx={{ color: statusColors.inProgress }} />
+              )}
+            </Box>
+            
+            {pet.observations && (
+              <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                {pet.observations}
+              </Typography>
+            )}
+          </Paper>
         )}
-      </Paper>
+      </Draggable>
     );
   };
 
-  // Visualização por dia em 4 colunas
-  const renderDayView = () => (
-    <Grid container spacing={2}>
-      {Object.entries(timeSchedule).sort().map(([time, timePets]) => (
-        <Grid item xs={12} key={time}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-            <Box sx={{ 
-              width: 100, 
-              textAlign: 'center',
-              pt: 1.5,
-              fontWeight: 'bold',
-              color: 'text.secondary',
-              position: 'sticky',
-              top: 0,
-              backgroundColor: 'background.paper',
-              zIndex: 1
-            }}>
-              {time}
-            </Box>
-            <Grid container spacing={2} sx={{ flex: 1 }}>
-              {timePets.map(pet => (
-                <Grid item xs={12} sm={6} md={3} key={pet.id}>
-                  {renderPetCard(pet)}
-                </Grid>
-              ))}
-            </Grid>
-          </Box>
-          <Divider sx={{ my: 2 }} />
-        </Grid>
-      ))}
-    </Grid>
-  );
+  // Visualização por dia
+  const renderDayView = () => {
+    const dayPets = filteredPets.sort((a, b) => {
+      const dateA = normalizeDate(a.scheduleDate);
+      const dateB = normalizeDate(b.scheduleDate);
+      return dateA - dateB;
+    });
 
-  // Visualização por semana em 4 colunas
-  const renderWeekView = () => (
-    <Grid container spacing={2}>
-      {weekDays.map(day => {
-        const dayPets = pets.filter(pet => {
-          const petDate = normalizeDate(pet.scheduleDate);
-          return petDate && isSameDay(petDate, day);
-        });
-        
-        return (
-          <Grid item xs={12} key={day}>
-            <Paper sx={{ 
-              p: 2, 
-              borderLeft: `4px solid ${isToday(day) ? statusColors.inProgress : isWeekend(day) ? theme.palette.secondary.light : theme.palette.grey[300]}`,
-              backgroundColor: isToday(day) ? '#f5f5f5' : 'white'
-            }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  {format(day, 'EEEE, dd/MM', { locale: ptBR })}
-                </Typography>
-                {isToday(day) && (
-                  <Chip label="HOJE" color="primary" size="small" />
-                )}
-                {isWeekend(day) && (
-                  <Chip label="FIM DE SEMANA" color="secondary" size="small" />
-                )}
-              </Box>
-              <Divider sx={{ my: 1 }} />
-              
-              {dayPets.length > 0 ? (
-                <Grid container spacing={2}>
-                  {dayPets.map(pet => (
-                    <Grid item xs={12} sm={6} md={3} key={pet.id}>
-                      {renderPetCard(pet)}
-                    </Grid>
-                  ))}
-                </Grid>
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                  Nenhum serviço agendado
-                </Typography>
-              )}
-            </Paper>
-          </Grid>
-        );
-      })}
-    </Grid>
-  );
-
-  // Visualização por mês
-  const renderMonthView = () => {
-    const weekDaysHeader = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    
     return (
       <Box>
-        <Grid container spacing={1} sx={{ mb: 1 }}>
-          {weekDaysHeader.map((day, index) => (
-            <Grid item xs key={index} sx={{ textAlign: 'center' }}>
-              <Typography variant="body2" fontWeight="bold">
-                {day}
-              </Typography>
-            </Grid>
-          ))}
-        </Grid>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+          {format(selectedDate, 'EEEE, dd/MM/yyyy', { locale: ptBR })}
+        </Typography>
         
-        <Grid container spacing={1}>
-          {monthDays.map(day => {
+        {dayPets.length > 0 ? (
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="day-view">
+              {(provided) => (
+                <div {...provided.droppableProps} ref={provided.innerRef}>
+                  {dayPets.map((pet, index) => renderPetCard(pet, index))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+            Nenhum serviço agendado para este dia.
+          </Typography>
+        )}
+      </Box>
+    );
+  };
+
+  // Visualização por semana
+  const renderWeekView = () => {
+    return (
+      <Box>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+          {getHeaderTitle()}
+        </Typography>
+        
+        <Grid container spacing={2}>
+          {weekDays.map(day => {
             const dayPets = pets.filter(pet => {
               const petDate = normalizeDate(pet.scheduleDate);
               return petDate && isSameDay(petDate, day);
+            }).sort((a, b) => {
+              const dateA = normalizeDate(a.scheduleDate);
+              const dateB = normalizeDate(b.scheduleDate);
+              return dateA - dateB;
             });
-            
+
             return (
-              <Grid item xs key={day} sx={{ minHeight: 100 }}>
-                <Paper 
-                  sx={{ 
-                    p: 1, 
-                    height: '100%',
-                    border: isToday(day) ? `2px solid ${theme.palette.primary.main}` : 'none',
-                    backgroundColor: isWeekend(day) ? '#F5F5F5' : 'white',
-                    position: 'relative',
-                    '&:hover': {
-                      boxShadow: 2
-                    }
-                  }}
-                >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography 
-                      variant="body2" 
-                      fontWeight={isToday(day) ? 'bold' : 'normal'}
-                      color={isToday(day) ? 'primary' : isWeekend(day) ? 'secondary' : 'text.primary'}
-                    >
-                      {format(day, 'd')}
+              <Grid item xs={12} sm={6} md={4} key={day}>
+                <Paper sx={{ 
+                  p: 2,
+                  borderLeft: `4px solid ${isToday(day) ? statusColors.inProgress : isWeekend(day) ? theme.palette.secondary.light : theme.palette.grey[300]}`,
+                  backgroundColor: isToday(day) ? '#f5f5f5' : 'white'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                      {format(day, 'EEEE, dd/MM', { locale: ptBR })}
                     </Typography>
-                    {dayPets.length > 0 && (
-                      <Badge 
-                        badgeContent={dayPets.length} 
-                        color="primary" 
-                        sx={{ 
-                          '& .MuiBadge-badge': {
-                            right: -5,
-                            top: -5
-                          }
-                        }}
-                      />
+                    {isToday(day) && (
+                      <Chip label="HOJE" color="primary" size="small" />
+                    )}
+                    {isWeekend(day) && (
+                      <Chip label="FIM DE SEMANA" color="secondary" size="small" />
                     )}
                   </Box>
                   
-                  {dayPets.slice(0, 2).map(pet => {
-                    const status = getPetStatus(pet);
-                    return (
-                      <Chip
-                        key={pet.id}
-                        label={`${pet.name} (${format(normalizeDate(pet.scheduleDate), 'HH:mm')})`}
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePetClick(pet);
-                        }}
-                        sx={{
-                          mt: 0.5,
-                          backgroundColor: statusColors[status],
-                          color: 'white',
-                          fontSize: '0.7rem',
-                          height: 20,
-                          display: 'block',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          cursor: 'pointer',
-                          '&:hover': {
-                            opacity: 0.9
-                          }
-                        }}
-                      />
-                    );
-                  })}
-                  
-                  {dayPets.length > 2 && (
-                    <Typography variant="caption" color="text.secondary">
-                      +{dayPets.length - 2} mais
+                  {dayPets.length > 0 ? (
+                    <DragDropContext onDragEnd={(result) => handleDragEnd(result, day)}>
+                      <Droppable droppableId={`week-day-${format(day, 'yyyy-MM-dd')}`}>
+                        {(provided) => (
+                          <div {...provided.droppableProps} ref={provided.innerRef}>
+                            {dayPets.map((pet, index) => renderPetCard(pet, index))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      Nenhum serviço agendado
                     </Typography>
                   )}
                 </Paper>
@@ -392,6 +311,183 @@ const Calendar = () => {
         </Grid>
       </Box>
     );
+  };
+
+  // Visualização por mês com arrastar e soltar
+  const renderMonthView = () => {
+    const weekDaysHeader = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const firstDayOfMonth = startOfMonth(selectedDate);
+    const startDayOfWeek = firstDayOfMonth.getDay();
+    const daysInMonth = eachDayOfInterval({
+      start: firstDayOfMonth,
+      end: endOfMonth(selectedDate)
+    });
+
+    const emptyStartDays = Array(startDayOfWeek).fill(null);
+    const calendarDays = [...emptyStartDays, ...daysInMonth];
+    const weeks = [];
+    
+    for (let i = 0; i < calendarDays.length; i += 7) {
+      weeks.push(calendarDays.slice(i, i + 7));
+    }
+
+    const handleDragEndMonth = (result) => {
+      if (!result.destination) return;
+
+      const petId = result.draggableId;
+      const sourceDay = result.source.droppableId.replace('month-day-', '');
+      const destinationDay = result.destination.droppableId.replace('month-day-', '');
+
+      if (sourceDay === destinationDay) return;
+
+      const pet = pets.find(p => p.id === petId);
+      if (!pet) return;
+
+      const newDate = new Date(destinationDay);
+      updatePetSchedule(petId, newDate);
+    };
+
+    return (
+      <DragDropContext onDragEnd={handleDragEndMonth}>
+        <Box>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+            {getHeaderTitle()}
+          </Typography>
+          
+          <Grid container spacing={1} sx={{ mb: 1 }}>
+            {weekDaysHeader.map((day, index) => (
+              <Grid item xs key={index} sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" fontWeight="bold">
+                  {day}
+                </Typography>
+              </Grid>
+            ))}
+          </Grid>
+
+          {weeks.map((week, weekIndex) => (
+            <Grid container spacing={1} key={weekIndex} sx={{ mb: 1 }}>
+              {week.map((day, dayIndex) => {
+                if (!day) {
+                  return (
+                    <Grid item xs key={`empty-${dayIndex}`} sx={{ minHeight: 120 }}>
+                      <Paper sx={{ 
+                        height: '100%', 
+                        backgroundColor: 'transparent', 
+                        boxShadow: 'none',
+                        border: `1px dashed ${theme.palette.grey[300]}`
+                      }} />
+                    </Grid>
+                  );
+                }
+                
+                const dayPets = pets.filter(pet => {
+                  const petDate = normalizeDate(pet.scheduleDate);
+                  return petDate && isSameDay(petDate, day);
+                }).sort((a, b) => {
+                  const dateA = normalizeDate(a.scheduleDate);
+                  const dateB = normalizeDate(b.scheduleDate);
+                  return dateA - dateB;
+                });
+                
+                return (
+                  <Grid item xs key={day} sx={{ minHeight: 120 }}>
+                    <Droppable droppableId={`month-day-${format(day, 'yyyy-MM-dd')}`}>
+                      {(provided) => (
+                        <Paper
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          sx={{ 
+                            p: 1,
+                            height: '100%',
+                            border: isToday(day) ? `2px solid ${theme.palette.primary.main}` : 'none',
+                            backgroundColor: isWeekend(day) ? '#F5F5F5' : 'white',
+                            position: 'relative'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <Typography 
+                              variant="body2" 
+                              fontWeight={isToday(day) ? 'bold' : 'normal'}
+                              color={isToday(day) ? 'primary' : isWeekend(day) ? 'secondary' : 'text.primary'}
+                            >
+                              {format(day, 'd')}
+                            </Typography>
+                            {dayPets.length > 0 && (
+                              <Badge 
+                                badgeContent={dayPets.length} 
+                                color="primary" 
+                                sx={{ 
+                                  '& .MuiBadge-badge': {
+                                    right: -5,
+                                    top: -5
+                                  }
+                                }}
+                              />
+                            )}
+                          </Box>
+                          
+                          <Box sx={{ 
+                            maxHeight: 90, 
+                            overflowY: 'auto',
+                            '&::-webkit-scrollbar': {
+                              width: '4px',
+                            },
+                            '&::-webkit-scrollbar-thumb': {
+                              backgroundColor: theme.palette.grey[400],
+                              borderRadius: '2px',
+                            }
+                          }}>
+                            {dayPets.map((pet, index) => (
+                              <Draggable key={pet.id} draggableId={pet.id} index={index}>
+                                {(provided) => (
+                                  <Box
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    onClick={() => handlePetClick(pet)}
+                                    sx={{
+                                      mt: 0.5,
+                                      p: 0.5,
+                                      backgroundColor: statusColors[getPetStatus(pet)],
+                                      color: 'white',
+                                      borderRadius: 1,
+                                      cursor: 'pointer',
+                                      '&:hover': {
+                                        opacity: 0.9
+                                      }
+                                    }}
+                                  >
+                                    <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
+                                      {pet.name} ({format(normalizeDate(pet.scheduleDate), 'HH:mm')})
+                                    </Typography>
+                                  </Box>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </Box>
+                        </Paper>
+                      )}
+                    </Droppable>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          ))}
+        </Box>
+      </DragDropContext>
+    );
+  };
+
+  // Manipulador de arrastar e soltar
+  const handleDragEnd = (result, day) => {
+    if (!result.destination) return;
+
+    const petId = result.draggableId;
+    const destinationDay = day || selectedDate;
+    
+    // Atualiza a data do pet
+    updatePetSchedule(petId, destinationDay);
   };
 
   // Manipuladores de eventos
@@ -418,9 +514,9 @@ const Calendar = () => {
     <Box sx={{ p: 3 }}>
       {/* Cabeçalho */}
       <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         mb: 3,
         flexWrap: 'wrap',
         gap: 2
@@ -428,9 +524,9 @@ const Calendar = () => {
         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
           Agenda de Serviços
         </Typography>
-        
-        <Tabs 
-          value={viewMode} 
+
+        <Tabs
+          value={viewMode}
           onChange={(e, newValue) => setViewMode(newValue)}
           sx={{ mb: 2 }}
           indicatorColor="primary"
@@ -443,10 +539,10 @@ const Calendar = () => {
       </Box>
 
       {/* Controles de navegação */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         mb: 3,
         backgroundColor: theme.palette.primary.main,
         color: 'white',
@@ -456,27 +552,27 @@ const Calendar = () => {
         gap: 2
       }}>
         <ButtonGroup variant="contained">
-          <Button 
+          <Button
             onClick={() => navigateDate(-1)}
-            sx={{ 
+            sx={{
               backgroundColor: theme.palette.secondary.main,
               '&:hover': { backgroundColor: theme.palette.secondary.dark }
             }}
           >
             Anterior
           </Button>
-          <Button 
+          <Button
             onClick={() => setSelectedDate(new Date())}
-            sx={{ 
+            sx={{
               backgroundColor: theme.palette.primary.dark,
               '&:hover': { backgroundColor: theme.palette.primary.light }
             }}
           >
             Hoje
           </Button>
-          <Button 
+          <Button
             onClick={() => navigateDate(1)}
-            sx={{ 
+            sx={{
               backgroundColor: theme.palette.secondary.main,
               '&:hover': { backgroundColor: theme.palette.secondary.dark }
             }}
@@ -484,7 +580,7 @@ const Calendar = () => {
             Próximo
           </Button>
         </ButtonGroup>
-        
+
         <Typography variant="h6" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
           {getHeaderTitle()}
         </Typography>
@@ -514,9 +610,9 @@ const Calendar = () => {
           {selectedPet && (
             <Box sx={{ mt: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                <Avatar sx={{ 
+                <Avatar sx={{
                   bgcolor: serviceColors[selectedPet.serviceType] || serviceColors['Outros'],
-                  width: 56, 
+                  width: 56,
                   height: 56,
                   fontSize: 24,
                   fontWeight: 'bold'
@@ -528,7 +624,7 @@ const Calendar = () => {
                   <Typography variant="body1" color="text.secondary">{selectedPet.owner}</Typography>
                 </Box>
               </Box>
-              
+
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={6}>
                   <Typography variant="body1">
@@ -551,9 +647,9 @@ const Calendar = () => {
                   )}
                 </Grid>
               </Grid>
-              
-              <Paper sx={{ 
-                p: 2, 
+
+              <Paper sx={{
+                p: 2,
                 backgroundColor: '#f5f5f5',
                 borderRadius: 1,
                 display: 'flex',
@@ -579,9 +675,9 @@ const Calendar = () => {
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>Fechar</Button>
           {!selectedPet?.inService && !selectedPet?.completedToday && (
-            <Button 
+            <Button
               onClick={handleStartService}
-              variant="contained" 
+              variant="contained"
               color="primary"
               startIcon={<PlayCircleOutlineIcon />}
               sx={{ minWidth: 180 }}
@@ -590,9 +686,9 @@ const Calendar = () => {
             </Button>
           )}
           {selectedPet?.inService && !selectedPet?.completedToday && (
-            <Button 
+            <Button
               onClick={handleCompleteService}
-              variant="contained" 
+              variant="contained"
               color="success"
               startIcon={<CheckCircleIcon />}
               sx={{ minWidth: 180 }}

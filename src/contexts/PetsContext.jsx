@@ -10,7 +10,7 @@ export const PetsProvider = ({ children }) => {
             owner: "João Silva",
             breed: "Golden Retriever",
             phone: "+5511999999999",
-            inService: false,  // Alterado para false para demonstrar a funcionalidade
+            inService: false,
             serviceProgress: 0,
             completedToday: false,
             serviceType: "Banho Completo",
@@ -24,7 +24,7 @@ export const PetsProvider = ({ children }) => {
             owner: "Maria Souza",
             breed: "Poodle",
             phone: "+5511888888888",
-            inService: false,  // Alterado para false para demonstrar a funcionalidade
+            inService: false,
             serviceProgress: 0,
             completedToday: false,
             serviceType: "Tosa Higiênica",
@@ -57,7 +57,7 @@ export const PetsProvider = ({ children }) => {
                     ...pet, 
                     inService: true,
                     serviceProgress: 0,
-                    serviceStartTime: new Date()  // Adiciona horário de início do serviço
+                    serviceStartTime: new Date()
                 };
             }
             return pet;
@@ -87,7 +87,7 @@ export const PetsProvider = ({ children }) => {
                 completedToday: true,
                 inService: false,
                 monthlyBathsRemaining,
-                serviceEndTime: new Date()  // Adiciona horário de término do serviço
+                serviceEndTime: new Date()
             };
         }));
     };
@@ -104,6 +104,38 @@ export const PetsProvider = ({ children }) => {
         }]);
     };
 
+    // Função para atualizar a data de agendamento de um pet
+    const updatePetSchedule = (petId, newDate) => {
+        setPets(pets.map(pet => {
+            if (pet.id === petId) {
+                // Mantém a mesma hora do agendamento original, apenas muda a data
+                const originalDate = new Date(pet.scheduleDate);
+                const updatedDate = new Date(newDate);
+                
+                // Atualiza a data mantendo o horário original
+                updatedDate.setHours(
+                    originalDate.getHours(),
+                    originalDate.getMinutes(),
+                    originalDate.getSeconds()
+                );
+                
+                // Calcula a nova data de término (se existir)
+                let newEndDate = null;
+                if (pet.scheduleEndDate) {
+                    const duration = new Date(pet.scheduleEndDate) - originalDate;
+                    newEndDate = new Date(updatedDate.getTime() + duration);
+                }
+                
+                return {
+                    ...pet,
+                    scheduleDate: updatedDate,
+                    scheduleEndDate: newEndDate || pet.scheduleEndDate
+                };
+            }
+            return pet;
+        }));
+    };
+
     return (
         <PetsContext.Provider value={{
             pets,
@@ -111,7 +143,8 @@ export const PetsProvider = ({ children }) => {
             addPet,
             startService,
             updateServiceProgress,
-            completeService
+            completeService,
+            updatePetSchedule 
         }}>
             {children}
         </PetsContext.Provider>
