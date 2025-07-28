@@ -1,11 +1,20 @@
 import { useContext, useState } from "react";
 import { PetsContext } from "../contexts/PetsContext";
-import { Box, Tab, Tabs, Paper, Typography } from "@mui/material";
+import {
+  Box, Tab, Tabs, Paper, Typography, Chip, Avatar,
+  Table, TableBody, TableCell, TableContainer,
+  TableHead, TableRow, Button, Dialog,
+  DialogTitle, DialogContent, DialogActions,
+  TextField, Alert
+} from "@mui/material";
 import PetForm from "../components/PetForm";
 import ServiceFlow from "../components/ServiceFlow";
 import Home from "./Home";
 import Calendar from "../components/Calendar";
 import Cashier from "./Cashier";
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import EventIcon from '@mui/icons-material/Event';
+import PeopleIcon from '@mui/icons-material/People';
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -26,45 +35,131 @@ function TabPanel(props) {
 const MainTabs = () => {
   const [value, setValue] = useState(0);
   const { pets, setPets } = useContext(PetsContext);
-  
+  const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [bathsQuantity, setBathsQuantity] = useState(4);
+  const [renewSuccess, setRenewSuccess] = useState(false);
+
   const activePets = pets.filter(pet => pet.inService && pet.serviceProgress < 3);
   const finishedPets = pets.filter(pet => pet.serviceProgress === 3);
+
+  const clients = pets.reduce((acc, pet) => {
+    const existingClient = acc.find(c => c.owner === pet.owner && c.phone === pet.phone);
+    if (existingClient) {
+      existingClient.pets.push(pet);
+    } else {
+      acc.push({
+        owner: pet.owner,
+        phone: pet.phone,
+        pets: [pet]
+      });
+    }
+    return acc;
+  }, []);
+
+  const groupedFinishedPets = finishedPets.reduce((acc, pet) => {
+    if (!acc[pet.serviceType]) {
+      acc[pet.serviceType] = [];
+    }
+    acc[pet.serviceType].push(pet);
+    return acc;
+  }, {});
 
   const handleChange = (event, newValue) => {
     setValue(newValue);
   };
 
   const updatePetProgress = (petId, progress) => {
-    setPets(pets.map(pet => 
+    setPets(pets.map(pet =>
       pet.id === petId ? { ...pet, serviceProgress: progress } : pet
     ));
   };
 
   const completeService = (petId) => {
-    setPets(pets.map(pet => 
-      pet.id === petId ? { 
-        ...pet, 
-        serviceProgress: 3, 
+    setPets(pets.map(pet =>
+      pet.id === petId ? {
+        ...pet,
+        serviceProgress: 3,
         completedToday: true,
-        inService: false 
+        inService: false,
+        completionDate: new Date().toISOString()
       } : pet
     ));
+  };
+
+  const handleOpenRenewDialog = (client) => {
+    setSelectedClient(client);
+    setRenewDialogOpen(true);
+    setRenewSuccess(false);
+  };
+
+  const handleCloseRenewDialog = () => {
+    setRenewDialogOpen(false);
+    setSelectedClient(null);
+    setBathsQuantity(4);
+  };
+
+  const handleRenewPlan = () => {
+    if (!selectedClient || bathsQuantity <= 0) return;
+
+    const updatedPets = pets.map(pet => {
+      const isClientPet = selectedClient.pets.some(clientPet => clientPet.id === pet.id);
+      if (isClientPet && pet.serviceType === "Plano Mensal") {
+        return {
+          ...pet,
+          monthlyBathsRemaining: (pet.monthlyBathsRemaining || 0) + bathsQuantity,
+          lastRenewalDate: new Date().toISOString()
+        };
+      }
+      return pet;
+    });
+
+    setPets(updatedPets);
+    setRenewSuccess(true);
+    setTimeout(() => {
+      handleCloseRenewDialog();
+    }, 1500);
+  };
+
+  const formatDate = (date, formatStr) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(d);
+  };
+
+  const getServiceColor = (serviceType) => {
+    const serviceColors = {
+      'Banho Completo': '#FF2D75',
+      'Banho e Tosa': '#00F0FF',
+      'Tosa Higiênica': '#e73434ff',
+      'Tosa Completa': '#ffd700ff',
+      'Plano Mensal': '#4671ffff',
+      'Banho': '#8e24aa',
+      'Outros': '#8fe99bff'
+    };
+    return serviceColors[serviceType] || serviceColors['Outros'];
   };
 
   return (
     <Box sx={{ width: '100%' }}>
       <Paper sx={{ mb: 2 }}>
-        <Tabs 
-          value={value} 
-          onChange={handleChange} 
+        <Tabs
+          value={value}
+          onChange={handleChange}
           variant="scrollable"
           scrollButtons="auto"
         >
           <Tab label="Início" />
           <Tab label="Cadastro Pet" />
+          <Tab label="Clientes" icon={<PeopleIcon />} iconPosition="start" />
           <Tab label="Serviços Ativos" />
           <Tab label="Serviços Finalizados" />
-          <Tab label="Agenda" />
+          <Tab label="Agenda" icon={<EventIcon />} iconPosition="start" />
           <Tab label="Caixa" />
         </Tabs>
       </Paper>
@@ -78,11 +173,169 @@ const MainTabs = () => {
       </TabPanel>
 
       <TabPanel value={value} index={2}>
+        <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
+          Clientes Cadastrados
+        </Typography>
+
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Dono</TableCell>
+                <TableCell>Contato</TableCell>
+                <TableCell>Pets</TableCell>
+                <TableCell>Serviços Agendados</TableCell>
+                <TableCell>Planos Mensais</TableCell>
+                <TableCell>Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {clients.map((client) => (
+                <TableRow key={`${client.owner}-${client.phone}`}>
+                  <TableCell>
+                    <Typography fontWeight="bold">{client.owner}</Typography>
+                  </TableCell>
+                  <TableCell>{client.phone}</TableCell>
+                  <TableCell>
+                    {client.pets.map(pet => (
+                      <Box key={pet.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <Avatar sx={{
+                          width: 32,
+                          height: 32,
+                          fontSize: 14,
+                          bgcolor: pet.inService ? '#29cf98ff' : '#439104ff'
+                        }}>
+                          {pet.name.charAt(0)}
+                        </Avatar>
+                        <Box>
+                          <Typography>{pet.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {pet.breed}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    ))}
+                  </TableCell>
+                  <TableCell>
+                    {client.pets.map(pet => (
+                      <Box key={pet.id} sx={{ mb: 1 }}>
+                        <Chip
+                          label={pet.serviceType}
+                          size="small"
+                          sx={{
+                            backgroundColor: getServiceColor(pet.serviceType),
+                            color: 'white',
+                            mr: 1
+                          }}
+                        />
+                        {pet.scheduleDate && (
+                          <Typography variant="caption">
+                            {formatDate(pet.scheduleDate)}
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
+                  </TableCell>
+                  <TableCell>
+                    {client.pets.filter(p => p.serviceType === "Plano Mensal").length > 0 ? (
+                      client.pets.filter(p => p.serviceType === "Plano Mensal").map(pet => (
+                        <Box key={pet.id} sx={{ mb: 1 }}>
+                          <Chip
+                            label={`${pet.monthlyBathsRemaining || 0} banhos restantes`}
+                            color={pet.monthlyBathsRemaining > 0 ? "primary" : "warning"}
+                            variant="outlined"
+                            size="small"
+                          />
+                          {pet.lastRenewalDate && (
+                            <Typography variant="caption" display="block">
+                              Última renovação: {formatDate(pet.lastRenewalDate, 'dd/MM/yyyy')}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        Nenhum plano ativo
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {client.pets.some(p => p.serviceType === "Plano Mensal") && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleOpenRenewDialog(client)}
+                      >
+                        Renovar Plano
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </TabPanel>
+
+      <Dialog open={renewDialogOpen} onClose={handleCloseRenewDialog}>
+        <DialogTitle>Renovar Plano Mensal</DialogTitle>
+        <DialogContent>
+          {selectedClient && (
+            <>
+              <Typography gutterBottom>
+                Cliente: <strong>{selectedClient.owner}</strong>
+              </Typography>
+              <Typography gutterBottom>
+                Pets no plano:
+              </Typography>
+              <ul>
+                {selectedClient.pets
+                  .filter(pet => pet.serviceType === "Plano Mensal")
+                  .map(pet => (
+                    <li key={pet.id}>
+                      {pet.name} ({pet.breed}) - {pet.monthlyBathsRemaining || 0} banhos restantes
+                    </li>
+                  ))}
+              </ul>
+
+              <TextField
+                margin="dense"
+                label="Quantidade de Banhos"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={bathsQuantity}
+                onChange={(e) => setBathsQuantity(parseInt(e.target.value) || 0)}
+                inputProps={{ min: 1 }}
+              />
+
+              {renewSuccess && (
+                <Alert severity="success" sx={{ mt: 2 }}>
+                  Plano renovado com sucesso!
+                </Alert>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseRenewDialog}>Cancelar</Button>
+          <Button
+            onClick={handleRenewPlan}
+            color="primary"
+            variant="contained"
+            disabled={bathsQuantity <= 0}
+          >
+            Confirmar Renovação
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <TabPanel value={value} index={3}>
         {activePets.length > 0 ? (
           activePets.map(pet => (
-            <ServiceFlow 
-              key={pet.id} 
-              pet={pet} 
+            <ServiceFlow
+              key={pet.id}
+              pet={pet}
               onNextStep={(petId, step) => updatePetProgress(petId, step)}
               onComplete={completeService}
             />
@@ -92,28 +345,74 @@ const MainTabs = () => {
         )}
       </TabPanel>
 
-      <TabPanel value={value} index={3}>
+      <TabPanel value={value} index={4}>
         {finishedPets.length > 0 ? (
-          finishedPets.map(pet => (
-            <Paper key={pet.id} sx={{ p: 2, mb: 2 }}>
-              <Typography>
-                {pet.name} (Dono: {pet.owner}) - Serviço: {pet.serviceType}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Finalizado em: {new Date().toLocaleString()}
-              </Typography>
-            </Paper>
-          ))
+          <Box>
+            <Typography variant="h4" gutterBottom>
+              Panorama de Serviços
+            </Typography>
+
+            {Object.entries(groupedFinishedPets).map(([serviceType, pets]) => (
+              <Box key={serviceType} sx={{ mb: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                  {serviceType} ({pets.length})
+                </Typography>
+
+                {pets.map(pet => (
+                  <Paper key={pet.id} sx={{
+                    p: 2,
+                    mb: 2,
+                    borderLeft: '4px solid #439104',
+                    position: 'relative'
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Avatar sx={{
+                        bgcolor: '#439104',
+                        width: 40,
+                        height: 40,
+                        fontSize: 16,
+                        fontWeight: 'bold'
+                      }}>
+                        {pet.name.charAt(0)}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {pet.name} ({pet.breed})
+                        </Typography>
+                        <Typography variant="body2">
+                          Dono: {pet.owner}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Box sx={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1
+                    }}>
+                      <CheckCircleIcon sx={{ color: '#439104' }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Finalizado
+                      </Typography>
+                    </Box>
+                  </Paper>
+                ))}
+              </Box>
+            ))}
+          </Box>
         ) : (
           <Typography>Nenhum serviço finalizado hoje</Typography>
         )}
       </TabPanel>
 
-      <TabPanel value={value} index={4}>
+      <TabPanel value={value} index={5}>
         <Calendar />
       </TabPanel>
 
-      <TabPanel value={value} index={5}>
+      <TabPanel value={value} index={6}>
         <Cashier />
       </TabPanel>
     </Box>

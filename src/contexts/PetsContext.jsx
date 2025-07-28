@@ -53,8 +53,8 @@ export const PetsProvider = ({ children }) => {
     const startService = (petId) => {
         setPets(pets.map(pet => {
             if (pet.id === petId) {
-                return { 
-                    ...pet, 
+                return {
+                    ...pet,
                     inService: true,
                     serviceProgress: 0,
                     serviceStartTime: new Date()
@@ -77,7 +77,7 @@ export const PetsProvider = ({ children }) => {
             if (pet.id !== petId) return pet;
 
             let monthlyBathsRemaining = pet.monthlyBathsRemaining;
-            if (pet.serviceType === "Plano Mensal" && pet.serviceProgress === 0) {
+            if (pet.serviceType === "Plano Mensal") {
                 monthlyBathsRemaining = Math.max(0, (pet.monthlyBathsRemaining || 0) - 1);
             }
 
@@ -89,6 +89,18 @@ export const PetsProvider = ({ children }) => {
                 monthlyBathsRemaining,
                 serviceEndTime: new Date()
             };
+        }));
+    };
+
+    const renewMonthlyPlan = (phone, baths) => {
+        setPets(pets.map(pet => {
+            if (pet.phone === phone && pet.serviceType === "Plano Mensal") {
+                return {
+                    ...pet,
+                    monthlyBathsRemaining: baths
+                };
+            }
+            return pet;
         }));
     };
 
@@ -111,21 +123,21 @@ export const PetsProvider = ({ children }) => {
                 // Mantém a mesma hora do agendamento original, apenas muda a data
                 const originalDate = new Date(pet.scheduleDate);
                 const updatedDate = new Date(newDate);
-                
+
                 // Atualiza a data mantendo o horário original
                 updatedDate.setHours(
                     originalDate.getHours(),
                     originalDate.getMinutes(),
                     originalDate.getSeconds()
                 );
-                
+
                 // Calcula a nova data de término (se existir)
                 let newEndDate = null;
                 if (pet.scheduleEndDate) {
                     const duration = new Date(pet.scheduleEndDate) - originalDate;
                     newEndDate = new Date(updatedDate.getTime() + duration);
                 }
-                
+
                 return {
                     ...pet,
                     scheduleDate: updatedDate,
@@ -144,7 +156,7 @@ export const PetsProvider = ({ children }) => {
             startService,
             updateServiceProgress,
             completeService,
-            updatePetSchedule 
+            updatePetSchedule
         }}>
             {children}
         </PetsContext.Provider>

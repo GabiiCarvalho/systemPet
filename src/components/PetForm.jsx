@@ -1,8 +1,9 @@
 import { useContext, useState } from "react";
 import { PetsContext } from "../contexts/PetsContext";
 import {
-  TextField, Button, Typography, Grid,
-  MenuItem, Paper, Container
+  TextField, Button, Typography, Box,
+  MenuItem, Paper, Container, Tabs, Tab,
+  Autocomplete, Chip, Alert, Avatar
 } from "@mui/material";
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -13,7 +14,12 @@ import 'react-phone-input-2/lib/style.css';
 
 const PetForm = () => {
   const { pets, setPets } = useContext(PetsContext);
-  const [form, setForm] = useState({
+  const [tabValue, setTabValue] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [selectedClient, setSelectedClient] = useState(null);
+
+  // Estado para novo cadastro
+  const [newPetForm, setNewPetForm] = useState({
     name: "",
     owner: "",
     breed: "",
@@ -26,28 +32,58 @@ const PetForm = () => {
     monthlyHygienicGrooming: false
   });
 
-  const handleSubmit = (e) => {
+  // Estado para agendamento rápido
+  const [quickScheduleForm, setQuickScheduleForm] = useState({
+    serviceType: "Banho",
+    scheduleDate: new Date(),
+    scheduleTime: new Date(),
+    observations: ""
+  });
+
+  // Agrupar clientes por telefone (único)
+  const clients = pets.reduce((acc, pet) => {
+    if (!acc.some(c => c.phone === pet.phone)) {
+      acc.push({
+        owner: pet.owner,
+        phone: pet.phone,
+        pets: pets.filter(p => p.phone === pet.phone)
+      });
+    }
+    return acc;
+  }, []);
+
+  // Filtrar clientes para busca
+  const filteredClients = clients.filter(client =>
+    client.owner.toLowerCase().includes(searchInput.toLowerCase()) ||
+    client.phone.includes(searchInput)
+  );
+
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
+  // Manipulador para novo cadastro
+  const handleNewPetSubmit = (e) => {
     e.preventDefault();
 
-    // Combinando data e hora
-    const scheduledDateTime = new Date(form.scheduleDate);
-    const time = new Date(form.scheduleTime);
+    const scheduledDateTime = new Date(newPetForm.scheduleDate);
+    const time = new Date(newPetForm.scheduleTime);
     scheduledDateTime.setHours(time.getHours());
     scheduledDateTime.setMinutes(time.getMinutes());
 
     const newPet = {
-      ...form,
+      ...newPetForm,
       id: Date.now(),
-      scheduledDateTime,
+      scheduleDate: scheduledDateTime,
       inService: false,
       serviceProgress: 0,
       completedToday: false,
-      monthlyBathsRemaining: form.serviceType === "Plano Mensal" ? 4 : 0,
-      monthlyHygienicGrooming: form.serviceType === "Plano Mensal"
+      monthlyBathsRemaining: newPetForm.serviceType === "Plano Mensal" ? 4 : 0,
+      monthlyHygienicGrooming: newPetForm.serviceType === "Plano Mensal"
     };
 
     setPets([...pets, newPet]);
-    setForm({
+    setNewPetForm({
       name: "",
       owner: "",
       breed: "",
@@ -61,131 +97,284 @@ const PetForm = () => {
     });
   };
 
+  // Manipulador para agendamento rápido
+  const handleQuickScheduleSubmit = (e) => {
+    e.preventDefault();
+
+    if (!selectedClient) return;
+
+    const scheduledDateTime = new Date(quickScheduleForm.scheduleDate);
+    const time = new Date(quickScheduleForm.scheduleTime);
+    scheduledDateTime.setHours(time.getHours());
+    scheduledDateTime.setMinutes(time.getMinutes());
+
+    // Para cada pet do cliente, cria um agendamento
+    const newAppointments = selectedClient.pets.map(pet => ({
+      ...pet,
+      id: Date.now() + Math.random(), // ID único
+      scheduleDate: scheduledDateTime,
+      serviceType: quickScheduleForm.serviceType,
+      observations: quickScheduleForm.observations,
+      inService: false,
+      serviceProgress: 0,
+      completedToday: false,
+      // Atualiza banhos restantes se for plano mensal
+      monthlyBathsRemaining: pet.serviceType === "Plano Mensal"
+        ? Math.max(0, (pet.monthlyBathsRemaining || 0) - 1)
+        : 0
+    }));
+
+    setPets([...pets, ...newAppointments]);
+    setQuickScheduleForm({
+      serviceType: "Banho",
+      scheduleDate: new Date(),
+      scheduleTime: new Date(),
+      observations: ""
+    });
+    setSelectedClient(null);
+    setSearchInput("");
+  };
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Container maxWidth="sm">
         <Paper sx={{ p: 3, mt: 4 }}>
-          <Typography
-            variant="h5"
-            gutterBottom
-            sx={{
-              mb: 3,
-              fontWeight: 'bold',
-              textAlign: 'center'
-            }}
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            sx={{ mb: 3 }}
           >
-            Cadastro de Novo Pet
-          </Typography>
+            <Tab label="Agendamento Rápido" />
+            <Tab label="Novo Cadastro" />
+          </Tabs>
 
-          <form onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              {/* Nome do Pet */}
-              <Grid item xs={12}>
-                <TextField
-                  label="Nome do Pet *"
-                  fullWidth
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
-              </Grid>
+          {tabValue === 0 ? (
+            <form onSubmit={handleQuickScheduleSubmit}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                Agendamento para Cliente Cadastrado
+              </Typography>
 
-              {/* Telefone */}
-              <Grid item xs={12}>
-                <PhoneInput
-                  country={'br'}
-                  value={form.phone}
-                  onChange={(phone) => setForm({ ...form, phone })}
-                  inputStyle={{ width: '100%' }}
-                  placeholder="Telefone para contato"
-                />
-              </Grid>
+              {/* Correção principal no Autocomplete */}
+              <Autocomplete
+                options={filteredClients}
+                getOptionLabel={(option) => `${option.owner} (${option.phone})`}
+                inputValue={searchInput}
+                onInputChange={(e, newValue) => setSearchInput(newValue)}
+                onChange={(e, newValue) => setSelectedClient(newValue)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Buscar cliente por nome ou telefone"
+                    fullWidth
+                    sx={{ mb: 2 }}
+                  />
+                )}
+                renderOption={(props, option) => {
+                  const { key, ...restProps } = props;
+                  return (
+                    <li key={option.phone} {...restProps}>
+                      <Box>
+                        <Typography>{option.owner}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {option.phone} • {option.pets.length} pet(s)
+                        </Typography>
+                      </Box>
+                    </li>
+                  );
+                }}
+              />
 
-              {/* Raça */}
-              <Grid item xs={12}>
-                <TextField
-                  label="Raça"
-                  fullWidth
-                  value={form.breed}
-                  onChange={(e) => setForm({ ...form, breed: e.target.value })}
-                />
-              </Grid>
+              {selectedClient && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Pets do cliente:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {selectedClient.pets.map(pet => (
+                      <Chip
+                        key={pet.id}
+                        label={`${pet.name} (${pet.breed})`}
+                        variant="outlined"
+                        avatar={
+                          <Avatar sx={{
+                            bgcolor: pet.serviceType === "Plano Mensal" ? '#4671ffff' : '#8e24aa',
+                            width: 24,
+                            height: 24,
+                            fontSize: 12
+                          }}>
+                            {pet.name.charAt(0)}
+                          </Avatar>
+                        }
+                      />
+                    ))}
+                  </Box>
 
-              {/* Tipo de Serviço */}
-              <Grid item xs={12}>
-                <TextField
-                  select
-                  label="Tipo de Serviço"
-                  fullWidth
-                  value={form.serviceType}
-                  onChange={(e) => setForm({ ...form, serviceType: e.target.value })}
-                >
-                  <MenuItem value="Banho">Banho</MenuItem>
-                  <MenuItem value="Banho e Tosa">Banho e Tosa</MenuItem>
-                  <MenuItem value="Tosa Higiênica">Tosa Higiênica</MenuItem>
-                  <MenuItem value="Tosa Completa">Tosa Completa</MenuItem>
-                  <MenuItem value="Plano Mensal">Plano Mensal</MenuItem>
-                </TextField>
-              </Grid>
+                  {selectedClient.pets.some(p => p.serviceType === "Plano Mensal") && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      Este cliente possui plano mensal. O banho será debitado do plano.
+                    </Alert>
+                  )}
+                </Box>
+              )}
 
-              {/* Data e Hora */}
-              <Grid item xs={12} sm={6}>
+              <TextField
+                select
+                label="Tipo de Serviço"
+                fullWidth
+                value={quickScheduleForm.serviceType}
+                onChange={(e) => setQuickScheduleForm({ ...quickScheduleForm, serviceType: e.target.value })}
+                sx={{ mb: 2 }}
+              >
+                <MenuItem value="Banho">Banho</MenuItem>
+                <MenuItem value="Banho e Tosa">Banho e Tosa</MenuItem>
+                <MenuItem value="Tosa Higiênica">Tosa Higiênica</MenuItem>
+                <MenuItem value="Tosa Completa">Tosa Completa</MenuItem>
+                <MenuItem value="Plano Mensal">Plano Mensal</MenuItem>
+              </TextField>
+
+              <Box sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gap: 2,
+                mb: 2
+              }}>
                 <DatePicker
                   label="Data do Serviço"
-                  value={form.scheduleDate}
-                  onChange={(newDate) => setForm({ ...form, scheduleDate: newDate })}
+                  value={quickScheduleForm.scheduleDate}
+                  onChange={(newDate) => setQuickScheduleForm({ ...quickScheduleForm, scheduleDate: newDate })}
                   slotProps={{ textField: { fullWidth: true } }}
                   minDate={new Date()}
                   format="dd/MM/yyyy"
                 />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
                 <TimePicker
                   label="Horário do Serviço"
-                  value={form.scheduleTime}
-                  onChange={(newTime) => setForm({ ...form, scheduleTime: newTime })}
+                  value={quickScheduleForm.scheduleTime}
+                  onChange={(newTime) => setQuickScheduleForm({ ...quickScheduleForm, scheduleTime: newTime })}
                   slotProps={{ textField: { fullWidth: true } }}
                 />
-              </Grid>
+              </Box>
 
-              {/* Nome do Dono */}
-              <Grid item xs={12}>
-                <TextField
-                  label="Nome do Dono *"
-                  fullWidth
-                  required
-                  value={form.owner}
-                  onChange={(e) => setForm({ ...form, owner: e.target.value })}
+              <TextField
+                label="Observações"
+                fullWidth
+                multiline
+                rows={2}
+                value={quickScheduleForm.observations}
+                onChange={(e) => setQuickScheduleForm({ ...quickScheduleForm, observations: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+
+              <Button
+                type="submit"
+                variant="contained"
+                size="large"
+                fullWidth
+                disabled={!selectedClient}
+                sx={{ py: 1.5 }}
+              >
+                AGENDAR SERVIÇO
+              </Button>
+            </form>
+          ) : (
+            // FORMULÁRIO DE NOVO CADASTRO
+            <form onSubmit={handleNewPetSubmit}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+                Cadastrar Novo Pet
+              </Typography>
+
+              <TextField
+                label="Nome do Pet *"
+                fullWidth
+                required
+                value={newPetForm.name}
+                onChange={(e) => setNewPetForm({ ...newPetForm, name: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+
+              <PhoneInput
+                country={'br'}
+                value={newPetForm.phone}
+                onChange={(phone) => setNewPetForm({ ...newPetForm, phone })}
+                inputStyle={{ width: '100%', marginBottom: '16px' }}
+                placeholder="Telefone para contato *"
+              />
+
+              <TextField
+                label="Raça"
+                fullWidth
+                value={newPetForm.breed}
+                onChange={(e) => setNewPetForm({ ...newPetForm, breed: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                select
+                label="Tipo de Serviço"
+                fullWidth
+                value={newPetForm.serviceType}
+                onChange={(e) => setNewPetForm({ ...newPetForm, serviceType: e.target.value })}
+                sx={{ mb: 2 }}
+              >
+                <MenuItem value="Banho">Banho</MenuItem>
+                <MenuItem value="Banho e Tosa">Banho e Tosa</MenuItem>
+                <MenuItem value="Tosa Higiênica">Tosa Higiênica</MenuItem>
+                <MenuItem value="Tosa Completa">Tosa Completa</MenuItem>
+                <MenuItem value="Plano Mensal">Plano Mensal</MenuItem>
+              </TextField>
+
+              <Box sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gap: 2,
+                mb: 2
+              }}>
+                <DatePicker
+                  label="Data do Serviço"
+                  value={newPetForm.scheduleDate}
+                  onChange={(newDate) => setNewPetForm({ ...newPetForm, scheduleDate: newDate })}
+                  slotProps={{ textField: { fullWidth: true } }}
+                  minDate={new Date()}
+                  format="dd/MM/yyyy"
                 />
-              </Grid>
-
-              {/* Observações */}
-              <Grid item xs={12}>
-                <TextField
-                  label="Observações"
-                  fullWidth
-                  multiline
-                  rows={3}
-                  value={form.observations}
-                  onChange={(e) => setForm({ ...form, observations: e.target.value })}
+                <TimePicker
+                  label="Horário do Serviço"
+                  value={newPetForm.scheduleTime}
+                  onChange={(newTime) => setNewPetForm({ ...newPetForm, scheduleTime: newTime })}
+                  slotProps={{ textField: { fullWidth: true } }}
                 />
-              </Grid>
+              </Box>
 
-              {/* Botão de Cadastro */}
-              <Grid item xs={12}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  size="large"
-                  fullWidth
-                  sx={{ mt: 2, py: 1.5 }}
-                >
-                  CADASTRAR PET
-                </Button>
-              </Grid>
-            </Grid>
-          </form>
+              <TextField
+                label="Nome do Dono *"
+                fullWidth
+                required
+                value={newPetForm.owner}
+                onChange={(e) => setNewPetForm({ ...newPetForm, owner: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                label="Observações"
+                fullWidth
+                multiline
+                rows={3}
+                value={newPetForm.observations}
+                onChange={(e) => setNewPetForm({ ...newPetForm, observations: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+
+              <Button
+                type="submit"
+                variant="contained"
+                size="large"
+                fullWidth
+                sx={{ py: 1.5 }}
+              >
+                CADASTRAR PET
+              </Button>
+            </form>
+          )}
         </Paper>
       </Container>
     </LocalizationProvider>
