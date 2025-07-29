@@ -527,11 +527,11 @@ const Calendar = () => {
   };
 
   const handleCompleteService = () => {
-    if (selectedPet) {
-      completeService(selectedPet.id);
-      setOpenDialog(false);
-    }
-  };
+  if (selectedPet) {
+    completeService(selectedPet.id);
+    setOpenDialog(false);
+  }
+};
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>

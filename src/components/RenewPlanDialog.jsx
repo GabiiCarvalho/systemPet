@@ -6,13 +6,18 @@ import {
 } from '@mui/material';
 
 const RenewPlanDialog = ({ open, onClose, client }) => {
-    const { renewMonthlyPlan } = useContext(PetsContext);
-    const [baths, setBaths] = useState(4);
+  const { renewMonthlyPlan } = useContext(PetsContext);
+  const [baths, setBaths] = useState(4);
 
-    const handleRenew = () => {
-        renewMonthlyPlan(client.phone, baths);
-        onClose();
-    };
+  const handleRenew = () => {
+    if (baths <= 0) {
+      alert("O plano deve ser renovado.");
+      return;
+    }
+    
+    renewMonthlyPlan(client.phone, baths);
+    onClose();
+  };
 
     return (
         <Dialog open={open} onClose={onClose}>

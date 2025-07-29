@@ -15,8 +15,8 @@ export const PetsProvider = ({ children }) => {
             completedToday: false,
             serviceType: "Banho Completo",
             observations: "Cuidado com as orelhas",
-            scheduleDate: new Date(),
-            scheduleEndDate: new Date(new Date().setHours(new Date().getHours() + 2))
+            scheduleDate: new Date('2023-05-15T10:00:00'),
+            scheduleEndDate: new Date('2023-05-15T12:00:00')
         },
         {
             id: 2,
@@ -27,11 +27,10 @@ export const PetsProvider = ({ children }) => {
             inService: false,
             serviceProgress: 0,
             completedToday: false,
-            serviceType: "Tosa Higiênica",
+            serviceType: "Plano Mensal",
             observations: "Gosta de ser escovada",
             monthlyBathsRemaining: 4,
-            monthlyHygienicGrooming: true,
-            scheduleDate: new Date(new Date().setHours(new Date().getHours() + 2))
+            scheduleDate: new Date('2023-05-15T14:00:00')
         },
         {
             id: 3,
@@ -44,12 +43,11 @@ export const PetsProvider = ({ children }) => {
             completedToday: false,
             serviceType: "Banho e Tosa",
             observations: "",
-            scheduleDate: new Date(new Date().setHours(new Date().getHours() - 3)),
-            scheduleEndDate: new Date(new Date().setHours(new Date().getHours() - 1))
+            scheduleDate: new Date('2023-05-15T09:00:00'),
+            scheduleEndDate: new Date('2023-05-15T11:00:00')
         }
     ]);
 
-    // Função para iniciar serviço
     const startService = (petId) => {
         setPets(pets.map(pet => {
             if (pet.id === petId) {
@@ -64,84 +62,87 @@ export const PetsProvider = ({ children }) => {
         }));
     };
 
-    // Função para atualizar progresso do serviço
     const updateServiceProgress = (petId, progress) => {
         setPets(pets.map(pet =>
             pet.id === petId ? { ...pet, serviceProgress: progress } : pet
         ));
     };
 
-    // Função para completar serviço
     const completeService = (petId) => {
         setPets(pets.map(pet => {
             if (pet.id !== petId) return pet;
 
-            let monthlyBathsRemaining = pet.monthlyBathsRemaining;
-            if (pet.serviceType === "Plano Mensal") {
-                monthlyBathsRemaining = Math.max(0, (pet.monthlyBathsRemaining || 0) - 1);
-            }
-
-            return {
+            const isMonthlyPlan = pet.serviceType === "Plano Mensal";
+            const updatedPet = {
                 ...pet,
-                serviceProgress: 3,
                 completedToday: true,
                 inService: false,
-                monthlyBathsRemaining,
+                serviceProgress: pet.serviceType.includes("Tosa") ? 4 : 3,
                 serviceEndTime: new Date()
             };
+
+            if (isMonthlyPlan) {
+                updatedPet.monthlyBathsRemaining = Math.max(0, (pet.monthlyBathsRemaining || 0) - 1);
+            }
+
+            return updatedPet;
         }));
     };
 
-    const renewMonthlyPlan = (phone, baths) => {
-        setPets(pets.map(pet => {
-            if (pet.phone === phone && pet.serviceType === "Plano Mensal") {
+    const renewMonthlyPlan = (clientPhone, bathsCount) => {
+        setPets(prevPets => prevPets.map(pet => {
+            if (pet.phone === clientPhone && pet.serviceType === "Plano Mensal") {
                 return {
                     ...pet,
-                    monthlyBathsRemaining: baths
+                    monthlyBathsRemaining: bathsCount
                 };
             }
             return pet;
         }));
     };
 
-    // Função para adicionar novo pet
     const addPet = (newPet) => {
+        const scheduleDate = new Date(newPet.scheduleDate);
+        let scheduleEndDate = null;
+
+        if (newPet.duration) {
+            scheduleEndDate = new Date(scheduleDate.getTime() + newPet.duration * 60 * 60 * 1000);
+        }
+
         setPets([...pets, {
             ...newPet,
             id: Date.now(),
             inService: false,
             serviceProgress: 0,
             completedToday: false,
-            scheduleDate: new Date(newPet.scheduleDate)
+            scheduleDate,
+            scheduleEndDate,
+            monthlyBathsRemaining: newPet.serviceType === "Plano Mensal" ? 4 : null
         }]);
     };
 
-    // Função para atualizar a data de agendamento de um pet
-    const updatePetSchedule = (petId, newDate) => {
+    const updatePetSchedule = (petId, newDateString) => {
         setPets(pets.map(pet => {
             if (pet.id === petId) {
-                // Mantém a mesma hora do agendamento original, apenas muda a data
+                const newDate = new Date(newDateString);
                 const originalDate = new Date(pet.scheduleDate);
-                const updatedDate = new Date(newDate);
 
-                // Atualiza a data mantendo o horário original
-                updatedDate.setHours(
+                newDate.setHours(
                     originalDate.getHours(),
                     originalDate.getMinutes(),
                     originalDate.getSeconds()
                 );
 
-                // Calcula a nova data de término (se existir)
                 let newEndDate = null;
                 if (pet.scheduleEndDate) {
-                    const duration = new Date(pet.scheduleEndDate) - originalDate;
-                    newEndDate = new Date(updatedDate.getTime() + duration);
+                    const duration = pet.scheduleEndDate - originalDate;
+                    newEndDate = new Date(newDate.getTime() + duration);
                 }
 
                 return {
                     ...pet,
-                    scheduleDate: updatedDate,
-                    scheduleEndDate: newEndDate || pet.scheduleEndDate
+                    scheduleDate: newDate,
+                    scheduleEndDate: newEndDate
                 };
             }
             return pet;
@@ -156,6 +157,7 @@ export const PetsProvider = ({ children }) => {
             startService,
             updateServiceProgress,
             completeService,
+            renewMonthlyPlan,
             updatePetSchedule
         }}>
             {children}

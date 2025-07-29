@@ -37,8 +37,6 @@ const MainTabs = () => {
   const { pets, setPets } = useContext(PetsContext);
   const [renewDialogOpen, setRenewDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [bathsQuantity, setBathsQuantity] = useState(4);
-  const [renewSuccess, setRenewSuccess] = useState(false);
 
   const activePets = pets.filter(pet => pet.inService && pet.serviceProgress < 3);
   const finishedPets = pets.filter(pet => pet.serviceProgress === 3);
@@ -90,35 +88,11 @@ const MainTabs = () => {
   const handleOpenRenewDialog = (client) => {
     setSelectedClient(client);
     setRenewDialogOpen(true);
-    setRenewSuccess(false);
   };
 
   const handleCloseRenewDialog = () => {
     setRenewDialogOpen(false);
     setSelectedClient(null);
-    setBathsQuantity(4);
-  };
-
-  const handleRenewPlan = () => {
-    if (!selectedClient || bathsQuantity <= 0) return;
-
-    const updatedPets = pets.map(pet => {
-      const isClientPet = selectedClient.pets.some(clientPet => clientPet.id === pet.id);
-      if (isClientPet && pet.serviceType === "Plano Mensal") {
-        return {
-          ...pet,
-          monthlyBathsRemaining: (pet.monthlyBathsRemaining || 0) + bathsQuantity,
-          lastRenewalDate: new Date().toISOString()
-        };
-      }
-      return pet;
-    });
-
-    setPets(updatedPets);
-    setRenewSuccess(true);
-    setTimeout(() => {
-      handleCloseRenewDialog();
-    }, 1500);
   };
 
   const formatDate = (date, formatStr) => {
@@ -286,46 +260,33 @@ const MainTabs = () => {
                 Cliente: <strong>{selectedClient.owner}</strong>
               </Typography>
               <Typography gutterBottom>
-                Pets no plano:
+                Para renovar o plano mensal, você deve:
               </Typography>
-              <ul>
-                {selectedClient.pets
-                  .filter(pet => pet.serviceType === "Plano Mensal")
-                  .map(pet => (
-                    <li key={pet.id}>
-                      {pet.name} ({pet.breed}) - {pet.monthlyBathsRemaining || 0} banhos restantes
-                    </li>
-                  ))}
-              </ul>
 
-              <TextField
-                margin="dense"
-                label="Quantidade de Banhos"
-                type="number"
-                fullWidth
-                variant="outlined"
-                value={bathsQuantity}
-                onChange={(e) => setBathsQuantity(parseInt(e.target.value) || 0)}
-                inputProps={{ min: 1 }}
-              />
+              <Alert severity="info" sx={{ my: 2 }}>
+                <strong>1.</strong> Ir para a aba de <strong>Caixa</strong><br />
+                <strong>2.</strong> Buscar pelo cliente "{selectedClient.owner}"<br />
+                <strong>3.</strong> Adicionar o serviço "Renovação Plano Mensal" ao carrinho<br />
+                <strong>4.</strong> Realizar o pagamento
+              </Alert>
 
-              {renewSuccess && (
-                <Alert severity="success" sx={{ mt: 2 }}>
-                  Plano renovado com sucesso!
-                </Alert>
-              )}
+              <Typography variant="body2" color="text.secondary">
+                Esta ação não pode ser feita diretamente aqui para garantir o registro do pagamento.
+              </Typography>
             </>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseRenewDialog}>Cancelar</Button>
+          <Button onClick={handleCloseRenewDialog}>Fechar</Button>
           <Button
-            onClick={handleRenewPlan}
-            color="primary"
+            onClick={() => {
+              handleCloseRenewDialog();
+              setValue(6); // Navega para a aba de Caixa (índice 6)
+            }}
             variant="contained"
-            disabled={bathsQuantity <= 0}
+            color="primary"
           >
-            Confirmar Renovação
+            Ir para o Caixa
           </Button>
         </DialogActions>
       </Dialog>

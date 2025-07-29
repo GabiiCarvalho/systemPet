@@ -42,13 +42,24 @@ const PetForm = () => {
 
   // Agrupar clientes por telefone (único)
   const clients = pets.reduce((acc, pet) => {
-    if (!acc.some(c => c.phone === pet.phone)) {
+    if (acc.some(c => c.pets.some(p => p.id === pet.id))) {
+      return acc;
+    }
+
+    const existingClient = acc.find(c => c.phone === pet.phone);
+
+    if (existingClient) {
+      if (!existingClient.pets.some(p => p.id === pet.id)) {
+        existingClient.pets.push(pet);
+      }
+    } else {
       acc.push({
         owner: pet.owner,
         phone: pet.phone,
-        pets: pets.filter(p => p.phone === pet.phone)
+        pets: [pet]
       });
     }
+
     return acc;
   }, []);
 
@@ -100,31 +111,69 @@ const PetForm = () => {
   // Manipulador para agendamento rápido
   const handleQuickScheduleSubmit = (e) => {
     e.preventDefault();
-
     if (!selectedClient) return;
+
+    const isRenewal = quickScheduleForm.serviceType === "Renovação Plano Mensal";
+
+    // Se for renovação, mostra mensagem e não permite continuar
+    if (isRenewal) {
+      alert(`Para renovar o plano mensal, por favor:\n
+1. Vá para a aba de Caixa\n
+2. Busque pelo cliente "${selectedClient.owner}"\n
+3. Adicione o serviço "Renovação Plano Mensal" ao carrinho\n
+4. Realize o pagamento`);
+      return;
+    }
+
+    const isMonthlyPlan = quickScheduleForm.serviceType === "Plano Mensal";
+
+    // Verifica pets sem plano tentando agendar como plano mensal
+    const petsWithoutPlan = selectedClient.pets.filter(pet =>
+      pet.serviceType !== "Plano Mensal" &&
+      quickScheduleForm.serviceType === "Plano Mensal"
+    );
+
+    if (petsWithoutPlan.length > 0) {
+      alert(`Os pets ${petsWithoutPlan.map(p => p.name).join(', ')} não têm plano mensal!`);
+      return;
+    }
+
+    // Verifica pets com plano mas sem banhos disponíveis
+    const petsWithNoBaths = selectedClient.pets.filter(pet =>
+      pet.serviceType === "Plano Mensal" &&
+      (pet.monthlyBathsRemaining || 0) <= 0 &&
+      quickScheduleForm.serviceType === "Plano Mensal"
+    );
+
+    if (petsWithNoBaths.length > 0) {
+      alert(`Os pets ${petsWithNoBaths.map(p => p.name).join(', ')} não têm banhos disponíveis! Renove o plano.`);
+      return;
+    }
 
     const scheduledDateTime = new Date(quickScheduleForm.scheduleDate);
     const time = new Date(quickScheduleForm.scheduleTime);
     scheduledDateTime.setHours(time.getHours());
     scheduledDateTime.setMinutes(time.getMinutes());
 
-    // Para cada pet do cliente, cria um agendamento
-    const newAppointments = selectedClient.pets.map(pet => ({
-      ...pet,
-      id: Date.now() + Math.random(), // ID único
-      scheduleDate: scheduledDateTime,
-      serviceType: quickScheduleForm.serviceType,
-      observations: quickScheduleForm.observations,
-      inService: false,
-      serviceProgress: 0,
-      completedToday: false,
-      // Atualiza banhos restantes se for plano mensal
-      monthlyBathsRemaining: pet.serviceType === "Plano Mensal"
-        ? Math.max(0, (pet.monthlyBathsRemaining || 0) - 1)
-        : 0
-    }));
+    const updatedPets = pets.map(pet => {
+      const isClientPet = selectedClient.pets.some(p => p.id === pet.id);
+      if (isClientPet) {
+        const updatedPet = {
+          ...pet,
+          scheduleDate: scheduledDateTime,
+          serviceType: quickScheduleForm.serviceType,
+          observations: quickScheduleForm.observations,
+          inService: false,
+          serviceProgress: 0,
+          completedToday: false
+        };
 
-    setPets([...pets, ...newAppointments]);
+        return updatedPet;
+      }
+      return pet;
+    });
+
+    setPets(updatedPets);
     setQuickScheduleForm({
       serviceType: "Banho",
       scheduleDate: new Date(),
@@ -155,7 +204,6 @@ const PetForm = () => {
                 Agendamento para Cliente Cadastrado
               </Typography>
 
-              {/* Correção principal no Autocomplete */}
               <Autocomplete
                 options={filteredClients}
                 getOptionLabel={(option) => `${option.owner} (${option.phone})`}
@@ -191,14 +239,27 @@ const PetForm = () => {
                     Pets do cliente:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {selectedClient.pets.map(pet => (
+                    {selectedClient.pets.map((pet, index) => (
                       <Chip
-                        key={pet.id}
-                        label={`${pet.name} (${pet.breed})`}
+                        key={`${pet.id}-${index}`}
+                        label={
+                          <>
+                            {pet.name} ({pet.breed})
+                            {pet.serviceType === "Plano Mensal" && (
+                              ` | ${pet.monthlyBathsRemaining} banhos restantes`
+                            )}
+                            {pet.serviceType === "Plano Mensal" && quickScheduleForm.serviceType === "Plano Mensal" && (
+                              ` (será ${pet.monthlyBathsRemaining - 1} após este serviço)`
+                            )}
+                          </>
+                        }
                         variant="outlined"
+                        color={pet.serviceType === "Plano Mensal" && pet.monthlyBathsRemaining <= 0 ? "warning" : "default"}
                         avatar={
                           <Avatar sx={{
-                            bgcolor: pet.serviceType === "Plano Mensal" ? '#4671ffff' : '#8e24aa',
+                            bgcolor: pet.serviceType === "Plano Mensal"
+                              ? (pet.monthlyBathsRemaining > 0 ? '#4671ffff' : '#ff9800')
+                              : '#8e24aa',
                             width: 24,
                             height: 24,
                             fontSize: 12
@@ -211,8 +272,24 @@ const PetForm = () => {
                   </Box>
 
                   {selectedClient.pets.some(p => p.serviceType === "Plano Mensal") && (
-                    <Alert severity="info" sx={{ mt: 2 }}>
-                      Este cliente possui plano mensal. O banho será debitado do plano.
+                    <Alert
+                      severity={
+                        selectedClient.pets.some(p =>
+                          p.serviceType === "Plano Mensal" &&
+                          (p.monthlyBathsRemaining || 0) <= 0
+                        )
+                          ? "warning"
+                          : "info"
+                      }
+                      sx={{ mt: 2 }}
+                    >
+                      {selectedClient.pets.some(p =>
+                        p.serviceType === "Plano Mensal" &&
+                        (p.monthlyBathsRemaining || 0) <= 0
+                      )
+                        ? "Alguns pets não têm banhos disponíveis no plano mensal. Renove o plano!"
+                        : "Este cliente possui plano mensal. O banho será debitado do plano após a conclusão do serviço."
+                      }
                     </Alert>
                   )}
                 </Box>
@@ -223,7 +300,17 @@ const PetForm = () => {
                 label="Tipo de Serviço"
                 fullWidth
                 value={quickScheduleForm.serviceType}
-                onChange={(e) => setQuickScheduleForm({ ...quickScheduleForm, serviceType: e.target.value })}
+                onChange={(e) => {
+                  if (e.target.value === "Renovação Plano Mensal") {
+                    alert(`Para renovar o plano mensal, por favor:\n
+1. Vá para a aba de Caixa\n
+2. Busque pelo cliente "${selectedClient?.owner || 'o cliente'}"\n
+3. Adicione o serviço "Renovação Plano Mensal" ao carrinho\n
+4. Realize o pagamento`);
+                    return;
+                  }
+                  setQuickScheduleForm({ ...quickScheduleForm, serviceType: e.target.value });
+                }}
                 sx={{ mb: 2 }}
               >
                 <MenuItem value="Banho">Banho</MenuItem>
@@ -231,6 +318,7 @@ const PetForm = () => {
                 <MenuItem value="Tosa Higiênica">Tosa Higiênica</MenuItem>
                 <MenuItem value="Tosa Completa">Tosa Completa</MenuItem>
                 <MenuItem value="Plano Mensal">Plano Mensal</MenuItem>
+                <MenuItem value="Renovação Plano Mensal">Renovação Plano Mensal</MenuItem>
               </TextField>
 
               <Box sx={{
@@ -277,7 +365,6 @@ const PetForm = () => {
               </Button>
             </form>
           ) : (
-            // FORMULÁRIO DE NOVO CADASTRO
             <form onSubmit={handleNewPetSubmit}>
               <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
                 Cadastrar Novo Pet
