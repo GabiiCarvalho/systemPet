@@ -119,6 +119,10 @@ const MainTabs = () => {
     return serviceColors[serviceType] || serviceColors['Outros'];
   };
 
+  const handleChangeTab = (newValue) => {
+    setValue(newValue);
+  };
+
   return (
     <Box sx={{ width: '100%' }}>
       <Paper sx={{ mb: 2 }}>
@@ -143,7 +147,7 @@ const MainTabs = () => {
       </TabPanel>
 
       <TabPanel value={value} index={1}>
-        <PetForm />
+        <PetForm onChangeTab={setValue} />
       </TabPanel>
 
       <TabPanel value={value} index={2}>
@@ -281,7 +285,7 @@ const MainTabs = () => {
           <Button
             onClick={() => {
               handleCloseRenewDialog();
-              setValue(6); // Navega para a aba de Caixa (índice 6)
+              setValue(6)
             }}
             variant="contained"
             color="primary"

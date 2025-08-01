@@ -90,11 +90,14 @@ export const PetsProvider = ({ children }) => {
     };
 
     const renewMonthlyPlan = (clientPhone, bathsCount) => {
+        const expirationDate = new Date();
+        expirationDate.setMonth(expirationDate.getMonth() + 1);
         setPets(prevPets => prevPets.map(pet => {
             if (pet.phone === clientPhone && pet.serviceType === "Plano Mensal") {
                 return {
                     ...pet,
-                    monthlyBathsRemaining: bathsCount
+                    monthlyBathsRemaining: bathsCount,
+                    planExpiration: expirationDate.toISOString()
                 };
             }
             return pet;
@@ -149,6 +152,19 @@ export const PetsProvider = ({ children }) => {
         }));
     };
 
+    const updatePetPlan = (petId, planData) => {
+        setPets(pets.map(pet => {
+            if (pet.id === petId) {
+                return {
+                    ...pet,
+                    planExpiration: planData.planExpiration,
+                    remainingServices: planData.remainingServices
+                };
+            }
+            return pet;
+        }));
+    };
+
     return (
         <PetsContext.Provider value={{
             pets,
@@ -158,7 +174,8 @@ export const PetsProvider = ({ children }) => {
             updateServiceProgress,
             completeService,
             renewMonthlyPlan,
-            updatePetSchedule
+            updatePetSchedule,
+            updatePetPlan
         }}>
             {children}
         </PetsContext.Provider>
