@@ -1,4 +1,5 @@
 import { useState, useContext } from "react";
+import { ToastContainer, toast } from "react-toastify";
 import { PetsContext } from "../contexts/PetsContext";
 import {
   TextField, Button, Typography, Box,
@@ -11,6 +12,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import PhoneInput from 'react-phone-input-2';
 import 'react-phone-input-2/lib/style.css';
+import 'react-toastify/dist/ReactToastify.css';
 
 const PetForm = ({ onChangeTab }) => {
   const { pets, setPets } = useContext(PetsContext);
@@ -32,7 +34,7 @@ const PetForm = ({ onChangeTab }) => {
   });
 
   const [quickScheduleForm, setQuickScheduleForm] = useState({
-    serviceType: "Banho",
+    serviceType: "Plano Mensal",
     scheduleDate: new Date(),
     scheduleTime: new Date(),
     observations: ""
@@ -64,7 +66,7 @@ const PetForm = ({ onChangeTab }) => {
     e.preventDefault();
 
     if (!newPetForm.name || !newPetForm.owner || !newPetForm.phone) {
-      alert("Preencha todos os campos obrigatórios!");
+      toast.error("Preencha todos os campos obrigatórios!");
       return;
     }
 
@@ -85,7 +87,6 @@ const PetForm = ({ onChangeTab }) => {
     };
 
     setPets([...pets, newPet]);
-
     setNewPetForm({
       name: "",
       owner: "",
@@ -99,68 +100,80 @@ const PetForm = ({ onChangeTab }) => {
       monthlyHygienicGrooming: false
     });
 
-    alert("Pet cadastrado com sucesso! Você será redirecionado para o caixa para finalizar o pagamento.");
-
-    if (onChangeTab) {
-      onChangeTab(6);
-    }
+    toast.success("Pet cadastrado com sucesso! Você será redirecionado para o caixa para finalizar o pagamento.");
+    onChangeTab(6);
   };
 
   const handleQuickScheduleSubmit = (e) => {
     e.preventDefault();
-    if (!selectedClient) return;
+    if (!selectedClient) {
+      toast.error("Selecione um cliente para agendar o serviço!");
+      return;
+    }
 
-    const petWithPlan = selectedClient.pets.find(p =>
+    const petWithActivePlan = selectedClient.pets.find(p => 
       p.serviceType === "Plano Mensal" &&
       p.monthlyBathsRemaining > 0 &&
       (!p.planExpiration || new Date(p.planExpiration) > new Date())
     );
 
+    const isPlanService = quickScheduleForm.serviceType === "Plano Mensal";
     const isRenewal = quickScheduleForm.serviceType === "Renovação Plano Mensal";
-    const isBathService = ["Banho", "Banho e Tosa"].includes(quickScheduleForm.serviceType);
+
+    if (isPlanService) {
+      if (petWithActivePlan) {
+        setPets(prevPets => prevPets.map(pet =>
+          pet.id === petWithActivePlan.id ? {
+            ...pet,
+            monthlyBathsRemaining: pet.monthlyBathsRemaining - 1
+          } : pet
+        ));
+
+        const newAppointment = {
+          ...petWithActivePlan,
+          id: Date.now(),
+          serviceType: "Banho",
+          scheduleDate: quickScheduleForm.scheduleDate,
+          scheduleTime: quickScheduleForm.scheduleTime,
+          observations: quickScheduleForm.observations,
+          inService: false,
+          serviceProgress: 0,
+          completedToday: false,
+          usingPlan: true
+        };
+
+        setPets(prevPets => [...prevPets, newAppointment]);
+
+        const remaining = petWithActivePlan.monthlyBathsRemaining - 1;
+        toast.success(
+          remaining > 0 
+            ? `Serviço agendado! Banhos restantes: ${remaining}`
+            : "Serviço agendado! Seu plano acabou, renove para continuar usando.",
+          { autoClose: 5000 }
+        );
+
+        setQuickScheduleForm({
+          serviceType: "Plano Mensal",
+          scheduleDate: new Date(),
+          scheduleTime: new Date(),
+          observations: ""
+        });
+      } else {
+        toast.error("Este cliente não tem um plano ativo com banhos disponíveis!");
+      }
+      return;
+    }
 
     if (isRenewal) {
       localStorage.setItem('pendingPlanRenewal', JSON.stringify({
         client: selectedClient,
         serviceType: quickScheduleForm.serviceType
       }));
-      alert("Você será redirecionado para o caixa para finalizar a renovação do plano.");
       onChangeTab(6);
+      toast.success("Renovação de plano - você será redirecionado ao caixa");
       return;
     }
 
-    if (isBathService && petWithPlan) {
-      
-      const newSchedule = {
-        client: selectedClient,
-        pet: petWithPlan,
-        serviceType: quickScheduleForm.serviceType,
-        scheduleDate: quickScheduleForm.scheduleDate,
-        scheduleTime: quickScheduleForm.scheduleTime,
-        observations: quickScheduleForm.observations,
-        usingPlan: true
-      };
-
-      setPets(prevPets => prevPets.map(pet =>
-        pet.id === petWithPlan.id ? {
-          ...pet,
-          monthlyBathsRemaining: Math.max(0, pet.monthlyBathsRemaining - 1)
-        } : pet
-      ));
-
-      alert("Serviço agendado com sucesso usando o plano mensal!");
-      setQuickScheduleForm({
-        serviceType: "Banho",
-        scheduleDate: new Date(),
-        scheduleTime: new Date(),
-        observations: ""
-      });
-      setSelectedClient(null);
-      setSearchInput("");
-      return;
-    }
-
-    
     localStorage.setItem('pendingServiceSchedule', JSON.stringify({
       client: selectedClient,
       serviceType: quickScheduleForm.serviceType,
@@ -170,8 +183,8 @@ const PetForm = ({ onChangeTab }) => {
       usingPlan: false
     }));
 
-    alert("Serviço agendado com sucesso! Você será redirecionado para o caixa para finalizar o pagamento.");
     onChangeTab(6);
+    toast.info("Você será redirecionado ao caixa para finalizar");
   };
 
   const clients = pets.reduce((acc, pet) => {
@@ -205,12 +218,9 @@ const PetForm = ({ onChangeTab }) => {
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Container maxWidth="sm">
         <Paper sx={{ p: 3, mt: 4 }}>
-          <Tabs
-            value={localTabValue}
-            onChange={handleTabChange}
-            variant="fullWidth"
-            sx={{ mb: 3 }}
-          >
+          <ToastContainer position="top-center" autoClose={5000} />
+          
+          <Tabs value={localTabValue} onChange={handleTabChange} variant="fullWidth" sx={{ mb: 3 }}>
             <Tab label="Agendamento Rápido" />
             <Tab label="Novo Cadastro" />
           </Tabs>
@@ -228,24 +238,17 @@ const PetForm = ({ onChangeTab }) => {
                 onInputChange={(e, newValue) => setSearchInput(newValue)}
                 onChange={(e, newValue) => setSelectedClient(newValue)}
                 renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Buscar cliente por nome ou telefone"
-                    fullWidth
-                    sx={{ mb: 2 }}
-                  />
+                  <TextField {...params} label="Buscar cliente por nome ou telefone" fullWidth sx={{ mb: 2 }} />
                 )}
                 renderOption={(props, option) => (
-                  <li key={option.phone}>
-                    <Box {...props}>
-                      <Box>
-                        <Typography>{option.owner}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {option.phone} • {option.pets.length} pet(s)
-                        </Typography>
-                      </Box>
+                  <Box component="li" {...props} key={option.phone}>
+                    <Box>
+                      <Typography>{option.owner}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {option.phone} • {option.pets.length} pet(s)
+                      </Typography>
                     </Box>
-                  </li>
+                  </Box>
                 )}
               />
 
@@ -284,11 +287,18 @@ const PetForm = ({ onChangeTab }) => {
                 value={quickScheduleForm.serviceType}
                 onChange={(e) => {
                   if (e.target.value === "Renovação Plano Mensal") {
-                    alert(`Para renovar o plano mensal, por favor:\n
-1. Vá para a aba de Caixa\n
-2. Busque pelo cliente "${selectedClient?.owner || 'o cliente'}"\n
-3. Adicione o serviço "Renovação Plano Mensal" ao carrinho\n
-4. Realize o pagamento`);
+                    toast.info(`Para renovar o plano mensal, por favor:
+1. Vá para a aba de Caixa
+2. Busque pelo cliente "${selectedClient?.owner || 'o cliente'}"
+3. Adicione o serviço "Renovação Plano Mensal" ao carrinho
+4. Realize o pagamento`, {
+                      position: "top-center",
+                      autoClose: 10000,
+                      hideProgressBar: false,
+                      closeOnClick: true,
+                      pauseOnHover: true,
+                      draggable: true,
+                    });
                     return;
                   }
                   setQuickScheduleForm({ ...quickScheduleForm, serviceType: e.target.value });
@@ -302,12 +312,7 @@ const PetForm = ({ onChangeTab }) => {
                 ))}
               </TextField>
 
-              <Box sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                gap: 2,
-                mb: 2
-              }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
                 <DatePicker
                   label="Data do Serviço"
                   value={quickScheduleForm.scheduleDate}
@@ -391,12 +396,7 @@ const PetForm = ({ onChangeTab }) => {
                 ))}
               </TextField>
 
-              <Box sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                gap: 2,
-                mb: 2
-              }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
                 <DatePicker
                   label="Data do Serviço"
                   value={newPetForm.scheduleDate}
