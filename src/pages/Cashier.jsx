@@ -31,8 +31,7 @@ const themeColors = {
   warning: '#ff9800'
 };
 
-const Receipt = ({ client, cart, paymentMethod, receivedValue, change }) => {
-  const { petshopName } = useContext(AuthContext);
+const Receipt = ({ client, cart, paymentMethod, receivedValue, change, petshopName }) => {
   
   const calculateTotal = () => {
     return cart.reduce((total, item) => total + item.price, 0);
@@ -1211,6 +1210,7 @@ const Cashier = () => {
                 paymentMethod={paymentMethod}
                 receivedValue={receivedValue}
                 change={calculateChange()}
+                petshopName={petshopName}
               />
 
               {cart.some(item => item.isPlan) && (
