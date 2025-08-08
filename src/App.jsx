@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { PetsProvider } from "./contexts/PetsContext";
 import MainTabs from "./pages/MainTabs";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
+import { AuthProvider } from "./contexts/AuthContext";
 
 const theme = createTheme({
   palette: {
@@ -13,6 +14,7 @@ const theme = createTheme({
 function App() {
   return (
     <ThemeProvider theme={theme}>
+      <AuthProvider>
       <PetsProvider>
         <BrowserRouter>
           <Routes>
@@ -20,6 +22,7 @@ function App() {
           </Routes>
         </BrowserRouter>
       </PetsProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }

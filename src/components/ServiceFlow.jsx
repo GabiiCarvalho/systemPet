@@ -50,7 +50,7 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
       serviceProgress: steps.length,
       monthlyBathsRemaining: isMonthlyPlan ? Math.max(0, (pet.monthlyBathsRemaining || 0) - 1) : 0
     };
-    
+
     onComplete?.(updatedPet);
     setOpenDialog(false);
   };
@@ -60,7 +60,7 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
       <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
         Processo para: {pet.name} (Dono: {pet.owner})
       </Typography>
-      
+
       <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
         Serviço: {pet.serviceType}
       </Typography>
@@ -71,7 +71,7 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
             label={`${bathsRemaining} banhos restantes`}
             color="primary"
             variant="outlined"
-            sx={{ 
+            sx={{
               fontWeight: 'bold',
               fontSize: '1rem',
               padding: '8px 12px'
@@ -87,6 +87,23 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
           </Step>
         ))}
       </Stepper>
+
+      {pet.observations && (
+        <Box sx={{
+          mb: 3,
+          p: 2,
+          backgroundColor: '#f5f5f5',
+          borderRadius: 1,
+          borderLeft: '4px solid #3f51b5'
+        }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+            Observações:
+          </Typography>
+          <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
+            {pet.observations}
+          </Typography>
+        </Box>
+      )}
 
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
         <Button
@@ -116,8 +133,8 @@ const ServiceFlow = ({ pet, onNextStep, onComplete }) => {
           )}
         </DialogContent>
         <DialogActions sx={{ padding: 3 }}>
-          <Button 
-            onClick={() => setOpenDialog(false)} 
+          <Button
+            onClick={() => setOpenDialog(false)}
             variant="outlined"
             sx={{ px: 4, py: 1 }}
           >

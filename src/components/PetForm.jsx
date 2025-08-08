@@ -4,7 +4,8 @@ import { PetsContext } from "../contexts/PetsContext";
 import {
   TextField, Button, Typography, Box,
   MenuItem, Paper, Container, Tabs, Tab,
-  Autocomplete, Chip, Alert, Avatar
+  Autocomplete, Chip, Alert, Avatar, Checkbox,
+  FormControlLabel, FormGroup
 } from "@mui/material";
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -19,6 +20,12 @@ const PetForm = ({ onChangeTab }) => {
   const [localTabValue, setLocalTabValue] = useState(0);
   const [searchInput, setSearchInput] = useState("");
   const [selectedClient, setSelectedClient] = useState(null);
+  const [additionalServices, setAdditionalServices] = useState({
+    nailTrim: false,
+    teethBrushing: false,
+    furHydration: false,
+    earCleaning: false
+  });
 
   const [newPetForm, setNewPetForm] = useState({
     name: "",
@@ -49,6 +56,14 @@ const PetForm = ({ onChangeTab }) => {
     "Renovação Plano Mensal": 180
   };
 
+  const additionalServicePrices = {
+    "nailTrim": 25,
+    "teethBrushing": 25,
+    "furHydration": 45,
+    "earCleaning": 30,
+    "eyeCleaning": 35
+  };
+
   const serviceDescriptions = {
     "Banho": "Banho completo com produtos de qualidade",
     "Banho e Tosa": "Banho completo + tosa higiênica",
@@ -62,6 +77,13 @@ const PetForm = ({ onChangeTab }) => {
     setLocalTabValue(newValue);
   };
 
+  const handleAdditionalServiceChange = (event) => {
+    setAdditionalServices({
+      ...additionalServices,
+      [event.target.name]: event.target.checked
+    });
+  };
+
   const handleNewPetSubmit = (e) => {
     e.preventDefault();
 
@@ -73,7 +95,10 @@ const PetForm = ({ onChangeTab }) => {
     const pendingData = {
       ...newPetForm,
       servicePrice: servicePrices[newPetForm.serviceType],
-      serviceDescription: serviceDescriptions[newPetForm.serviceType]
+      serviceDescription: serviceDescriptions[newPetForm.serviceType],
+      additionalServices: Object.entries(additionalServices)
+        .filter(([_, value]) => value)
+        .map(([key]) => key)
     };
 
     localStorage.setItem('pendingPetRegistration', JSON.stringify(pendingData));
@@ -83,7 +108,10 @@ const PetForm = ({ onChangeTab }) => {
       id: Date.now(),
       inService: false,
       serviceProgress: 0,
-      completedToday: false
+      completedToday: false,
+      additionalServices: Object.entries(additionalServices)
+        .filter(([_, value]) => value)
+        .map(([key]) => key)
     };
 
     setPets([...pets, newPet]);
@@ -99,6 +127,12 @@ const PetForm = ({ onChangeTab }) => {
       monthlyBathsRemaining: 0,
       monthlyHygienicGrooming: false
     });
+    setAdditionalServices({
+      nailTrim: false,
+      teethBrushing: false,
+      furHydration: false,
+      earCleaning: false
+    });
 
     toast.success("Pet cadastrado com sucesso! Você será redirecionado para o caixa para finalizar o pagamento.");
     onChangeTab(6);
@@ -111,7 +145,7 @@ const PetForm = ({ onChangeTab }) => {
       return;
     }
 
-    const petWithActivePlan = selectedClient.pets.find(p => 
+    const petWithActivePlan = selectedClient.pets.find(p =>
       p.serviceType === "Plano Mensal" &&
       p.monthlyBathsRemaining > 0 &&
       (!p.planExpiration || new Date(p.planExpiration) > new Date())
@@ -122,12 +156,9 @@ const PetForm = ({ onChangeTab }) => {
 
     if (isPlanService) {
       if (petWithActivePlan) {
-        setPets(prevPets => prevPets.map(pet =>
-          pet.id === petWithActivePlan.id ? {
-            ...pet,
-            monthlyBathsRemaining: pet.monthlyBathsRemaining - 1
-          } : pet
-        ));
+        const selectedAdditionalServices = Object.entries(additionalServices)
+          .filter(([_, value]) => value)
+          .map(([key]) => key);
 
         const newAppointment = {
           ...petWithActivePlan,
@@ -139,17 +170,27 @@ const PetForm = ({ onChangeTab }) => {
           inService: false,
           serviceProgress: 0,
           completedToday: false,
-          usingPlan: true
+          usingPlan: true,
+          additionalServices: selectedAdditionalServices
         };
 
+        // Atualiza o número de banhos restantes no pet original do plano
+        setPets(prevPets => prevPets.map(pet =>
+          pet.id === petWithActivePlan.id ? {
+            ...pet,
+            monthlyBathsRemaining: pet.monthlyBathsRemaining - 1
+          } : pet
+        ));
+
+        // Adiciona o novo agendamento
         setPets(prevPets => [...prevPets, newAppointment]);
 
         const remaining = petWithActivePlan.monthlyBathsRemaining - 1;
         toast.success(
-          remaining > 0 
+          remaining > 0
             ? `Serviço agendado! Banhos restantes: ${remaining}`
             : "Serviço agendado! Seu plano acabou, renove para continuar usando.",
-          { autoClose: 5000 }
+          { autoClose: 3000 }
         );
 
         setQuickScheduleForm({
@@ -157,6 +198,12 @@ const PetForm = ({ onChangeTab }) => {
           scheduleDate: new Date(),
           scheduleTime: new Date(),
           observations: ""
+        });
+        setAdditionalServices({
+          nailTrim: false,
+          teethBrushing: false,
+          furHydration: false,
+          earCleaning: false
         });
       } else {
         toast.error("Este cliente não tem um plano ativo com banhos disponíveis!");
@@ -174,13 +221,18 @@ const PetForm = ({ onChangeTab }) => {
       return;
     }
 
+    const selectedAdditionalServices = Object.entries(additionalServices)
+      .filter(([_, value]) => value)
+      .map(([key]) => key);
+
     localStorage.setItem('pendingServiceSchedule', JSON.stringify({
       client: selectedClient,
       serviceType: quickScheduleForm.serviceType,
       scheduleDate: quickScheduleForm.scheduleDate,
       scheduleTime: quickScheduleForm.scheduleTime,
       observations: quickScheduleForm.observations,
-      usingPlan: false
+      usingPlan: false,
+      additionalServices: selectedAdditionalServices
     }));
 
     onChangeTab(6);
@@ -214,12 +266,18 @@ const PetForm = ({ onChangeTab }) => {
     client.phone.includes(searchInput)
   );
 
+  const getAdditionalServicesPrice = () => {
+    return Object.entries(additionalServices)
+      .filter(([_, value]) => value)
+      .reduce((total, [key]) => total + additionalServicePrices[key], 0);
+  };
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Container maxWidth="sm">
         <Paper sx={{ p: 3, mt: 4 }}>
-          <ToastContainer position="top-center" autoClose={5000} />
-          
+          <ToastContainer position="top-center" autoClose={3000} />
+
           <Tabs value={localTabValue} onChange={handleTabChange} variant="fullWidth" sx={{ mb: 3 }}>
             <Tab label="Agendamento Rápido" />
             <Tab label="Novo Cadastro" />
@@ -329,6 +387,66 @@ const PetForm = ({ onChangeTab }) => {
                 />
               </Box>
 
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Serviços Adicionais:</Typography>
+              <FormGroup row sx={{ mb: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.nailTrim}
+                      onChange={handleAdditionalServiceChange}
+                      name="nailTrim"
+                    />
+                  }
+                  label={`Aparar Unhas (R$ ${additionalServicePrices.nailTrim.toFixed(2)})`}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.teethBrushing}
+                      onChange={handleAdditionalServiceChange}
+                      name="teethBrushing"
+                    />
+                  }
+                  label={`Escovar Dentes (R$ ${additionalServicePrices.teethBrushing.toFixed(2)})`}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.furHydration}
+                      onChange={handleAdditionalServiceChange}
+                      name="furHydration"
+                    />
+                  }
+                  label={`Hidratar Pelos (R$ ${additionalServicePrices.furHydration.toFixed(2)})`}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.eyeCleaning}
+                      onChange={handleAdditionalServiceChange}
+                      name="eyeCleaning"
+                    />
+                  }
+                  label={`Limpeza dos Olhos (R$ ${additionalServicePrices.furHydration.toFixed(2)})`}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.earCleaning}
+                      onChange={handleAdditionalServiceChange}
+                      name="earCleaning"
+                    />
+                  }
+                  label={`Limpeza de Ouvidos (R$ ${additionalServicePrices.earCleaning.toFixed(2)})`}
+                />
+              </FormGroup>
+
+              {Object.values(additionalServices).some(v => v) && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Total de serviços adicionais: R$ {getAdditionalServicesPrice().toFixed(2)}
+                </Alert>
+              )}
+
               <TextField
                 label="Observações"
                 fullWidth
@@ -421,6 +539,56 @@ const PetForm = ({ onChangeTab }) => {
                 onChange={(e) => setNewPetForm({ ...newPetForm, owner: e.target.value })}
                 sx={{ mb: 2 }}
               />
+
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Serviços Adicionais:</Typography>
+              <FormGroup row sx={{ mb: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.nailTrim}
+                      onChange={handleAdditionalServiceChange}
+                      name="nailTrim"
+                    />
+                  }
+                  label={`Aparar Unhas (R$ ${additionalServicePrices.nailTrim.toFixed(2)})`}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.teethBrushing}
+                      onChange={handleAdditionalServiceChange}
+                      name="teethBrushing"
+                    />
+                  }
+                  label={`Escovar Dentes (R$ ${additionalServicePrices.teethBrushing.toFixed(2)})`}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.furHydration}
+                      onChange={handleAdditionalServiceChange}
+                      name="furHydration"
+                    />
+                  }
+                  label={`Hidratar Pelos (R$ ${additionalServicePrices.furHydration.toFixed(2)})`}
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={additionalServices.earCleaning}
+                      onChange={handleAdditionalServiceChange}
+                      name="earCleaning"
+                    />
+                  }
+                  label={`Limpeza de Ouvidos (R$ ${additionalServicePrices.earCleaning.toFixed(2)})`}
+                />
+              </FormGroup>
+
+              {Object.values(additionalServices).some(v => v) && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Total de serviços adicionais: R$ {getAdditionalServicesPrice().toFixed(2)}
+                </Alert>
+              )}
 
               <TextField
                 label="Observações"

@@ -1,5 +1,6 @@
 import { useContext, useState } from "react";
 import { PetsContext } from "../contexts/PetsContext";
+import { AuthContext } from "../contexts/AuthContext";
 import {
   Box, Tab, Tabs, Paper, Typography, Chip, Avatar,
   Table, TableBody, TableCell, TableContainer,
@@ -15,6 +16,8 @@ import Cashier from "./Cashier";
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EventIcon from '@mui/icons-material/Event';
 import PeopleIcon from '@mui/icons-material/People';
+import LoginScreen from '../components/LoginScreen';
+import Settings from "../components/Settings";
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -40,6 +43,11 @@ const MainTabs = () => {
 
   const activePets = pets.filter(pet => pet.inService && pet.serviceProgress < 3);
   const finishedPets = pets.filter(pet => pet.serviceProgress === 3);
+
+  const { user } = useContext(AuthContext);
+  if (!user) {
+    return <LoginScreen />;
+  }
 
   const clients = pets.reduce((acc, pet) => {
     const existingClient = acc.find(c => c.owner === pet.owner && c.phone === pet.phone);
@@ -119,9 +127,289 @@ const MainTabs = () => {
     return serviceColors[serviceType] || serviceColors['Outros'];
   };
 
-  const handleChangeTab = (newValue) => {
-    setValue(newValue);
-  };
+  const employeeTabs = [
+    { 
+      label: "Serviços Ativos", 
+      content: activePets.length > 0 ? (
+        activePets.map(pet => (
+          <ServiceFlow
+            key={pet.id}
+            pet={pet}
+            onNextStep={(petId, step) => updatePetProgress(petId, step)}
+            onComplete={completeService}
+          />
+        ))
+      ) : (
+        <Typography>Nenhum pet em serviço no momento</Typography>
+      )
+    },
+    { 
+      label: "Serviços Finalizados", 
+      content: finishedPets.length > 0 ? (
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            Panorama de Serviços
+          </Typography>
+          {Object.entries(groupedFinishedPets).map(([serviceType, pets]) => (
+            <Box key={serviceType} sx={{ mb: 4 }}>
+              <Typography variant="h6" gutterBottom>
+                {serviceType} ({pets.length})
+              </Typography>
+              {pets.map(pet => (
+                <Paper key={pet.id} sx={{
+                  p: 2,
+                  mb: 2,
+                  borderLeft: '4px solid #439104',
+                  position: 'relative'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Avatar sx={{
+                      bgcolor: '#439104',
+                      width: 40,
+                      height: 40,
+                      fontSize: 16,
+                      fontWeight: 'bold'
+                    }}>
+                      {pet.name.charAt(0)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {pet.name} ({pet.breed})
+                      </Typography>
+                      <Typography variant="body2">
+                        Dono: {pet.owner}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}>
+                    <CheckCircleIcon sx={{ color: '#439104' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Finalizado
+                    </Typography>
+                  </Box>
+                </Paper>
+              ))}
+            </Box>
+          ))}
+        </Box>
+      ) : (
+        <Typography>Nenhum serviço finalizado hoje</Typography>
+      )
+    },
+    { 
+      label: "Agenda", 
+      icon: <EventIcon />, 
+      iconPosition: "start",
+      content: <Calendar />
+    }
+  ];
+
+  const ownerTabs = [
+    { label: "Início", content: <Home /> },
+    { label: "Cadastro Pet", content: <PetForm onChangeTab={setValue} /> },
+    { 
+      label: "Clientes", 
+      icon: <PeopleIcon />, 
+      iconPosition: "start",
+      content: (
+        <>
+          <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
+            Clientes Cadastrados
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Dono</TableCell>
+                  <TableCell>Contato</TableCell>
+                  <TableCell>Pets</TableCell>
+                  <TableCell>Serviços Agendados</TableCell>
+                  <TableCell>Planos Mensais</TableCell>
+                  <TableCell>Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {clients.map((client) => (
+                  <TableRow key={`${client.owner}-${client.phone}`}>
+                    <TableCell>
+                      <Typography fontWeight="bold">{client.owner}</Typography>
+                    </TableCell>
+                    <TableCell>{client.phone}</TableCell>
+                    <TableCell>
+                      {client.pets.map(pet => (
+                        <Box key={pet.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <Avatar sx={{
+                            width: 32,
+                            height: 32,
+                            fontSize: 14,
+                            bgcolor: pet.inService ? '#29cf98ff' : '#439104ff'
+                          }}>
+                            {pet.name.charAt(0)}
+                          </Avatar>
+                          <Box>
+                            <Typography>{pet.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {pet.breed}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      ))}
+                    </TableCell>
+                    <TableCell>
+                      {client.pets.map(pet => (
+                        <Box key={pet.id} sx={{ mb: 1 }}>
+                          <Chip
+                            label={pet.serviceType}
+                            size="small"
+                            sx={{
+                              backgroundColor: getServiceColor(pet.serviceType),
+                              color: 'white',
+                              mr: 1
+                            }}
+                          />
+                          {pet.scheduleDate && (
+                            <Typography variant="caption">
+                              {formatDate(pet.scheduleDate)}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                    </TableCell>
+                    <TableCell>
+                      {client.pets.filter(p => p.serviceType === "Plano Mensal").length > 0 ? (
+                        client.pets.filter(p => p.serviceType === "Plano Mensal").map(pet => (
+                          <Box key={pet.id} sx={{ mb: 1 }}>
+                            <Chip
+                              label={`${pet.monthlyBathsRemaining || 0} banhos restantes`}
+                              color={pet.monthlyBathsRemaining > 0 ? "primary" : "warning"}
+                              variant="outlined"
+                              size="small"
+                            />
+                            {pet.lastRenewalDate && (
+                              <Typography variant="caption" display="block">
+                                Última renovação: {formatDate(pet.lastRenewalDate, 'dd/MM/yyyy')}
+                              </Typography>
+                            )}
+                          </Box>
+                        ))
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          Nenhum plano ativo
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {client.pets.some(p => p.serviceType === "Plano Mensal") && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => handleOpenRenewDialog(client)}
+                        >
+                          Renovar Plano
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )
+    },
+    { 
+      label: "Serviços Ativos", 
+      content: activePets.length > 0 ? (
+        activePets.map(pet => (
+          <ServiceFlow
+            key={pet.id}
+            pet={pet}
+            onNextStep={(petId, step) => updatePetProgress(petId, step)}
+            onComplete={completeService}
+          />
+        ))
+      ) : (
+        <Typography>Nenhum pet em serviço no momento</Typography>
+      )
+    },
+    { 
+      label: "Serviços Finalizados", 
+      content: finishedPets.length > 0 ? (
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            Panorama de Serviços
+          </Typography>
+          {Object.entries(groupedFinishedPets).map(([serviceType, pets]) => (
+            <Box key={serviceType} sx={{ mb: 4 }}>
+              <Typography variant="h6" gutterBottom>
+                {serviceType} ({pets.length})
+              </Typography>
+              {pets.map(pet => (
+                <Paper key={pet.id} sx={{
+                  p: 2,
+                  mb: 2,
+                  borderLeft: '4px solid #439104',
+                  position: 'relative'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Avatar sx={{
+                      bgcolor: '#439104',
+                      width: 40,
+                      height: 40,
+                      fontSize: 16,
+                      fontWeight: 'bold'
+                    }}>
+                      {pet.name.charAt(0)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {pet.name} ({pet.breed})
+                      </Typography>
+                      <Typography variant="body2">
+                        Dono: {pet.owner}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}>
+                    <CheckCircleIcon sx={{ color: '#439104' }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Finalizado
+                    </Typography>
+                  </Box>
+                </Paper>
+              ))}
+            </Box>
+          ))}
+        </Box>
+      ) : (
+        <Typography>Nenhum serviço finalizado hoje</Typography>
+      )
+    },
+    { 
+      label: "Agenda", 
+      icon: <EventIcon />, 
+      iconPosition: "start",
+      content: <Calendar />
+    },
+    { label: "Caixa", content: <Cashier /> },
+    { label: "Configurações", content: <Settings /> }
+  ];
+
+  const tabs = user.role === 'owner' ? ownerTabs : employeeTabs;
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -132,128 +420,22 @@ const MainTabs = () => {
           variant="scrollable"
           scrollButtons="auto"
         >
-          <Tab label="Início" />
-          <Tab label="Cadastro Pet" />
-          <Tab label="Clientes" icon={<PeopleIcon />} iconPosition="start" />
-          <Tab label="Serviços Ativos" />
-          <Tab label="Serviços Finalizados" />
-          <Tab label="Agenda" icon={<EventIcon />} iconPosition="start" />
-          <Tab label="Caixa" />
+          {tabs.map((tab, index) => (
+            <Tab
+              key={index}
+              label={tab.label}
+              icon={tab.icon}
+              iconPosition={tab.iconPosition}
+            />
+          ))}
         </Tabs>
       </Paper>
 
-      <TabPanel value={value} index={0}>
-        <Home />
-      </TabPanel>
-
-      <TabPanel value={value} index={1}>
-        <PetForm onChangeTab={setValue} />
-      </TabPanel>
-
-      <TabPanel value={value} index={2}>
-        <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
-          Clientes Cadastrados
-        </Typography>
-
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Dono</TableCell>
-                <TableCell>Contato</TableCell>
-                <TableCell>Pets</TableCell>
-                <TableCell>Serviços Agendados</TableCell>
-                <TableCell>Planos Mensais</TableCell>
-                <TableCell>Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {clients.map((client) => (
-                <TableRow key={`${client.owner}-${client.phone}`}>
-                  <TableCell>
-                    <Typography fontWeight="bold">{client.owner}</Typography>
-                  </TableCell>
-                  <TableCell>{client.phone}</TableCell>
-                  <TableCell>
-                    {client.pets.map(pet => (
-                      <Box key={pet.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                        <Avatar sx={{
-                          width: 32,
-                          height: 32,
-                          fontSize: 14,
-                          bgcolor: pet.inService ? '#29cf98ff' : '#439104ff'
-                        }}>
-                          {pet.name.charAt(0)}
-                        </Avatar>
-                        <Box>
-                          <Typography>{pet.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {pet.breed}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    ))}
-                  </TableCell>
-                  <TableCell>
-                    {client.pets.map(pet => (
-                      <Box key={pet.id} sx={{ mb: 1 }}>
-                        <Chip
-                          label={pet.serviceType}
-                          size="small"
-                          sx={{
-                            backgroundColor: getServiceColor(pet.serviceType),
-                            color: 'white',
-                            mr: 1
-                          }}
-                        />
-                        {pet.scheduleDate && (
-                          <Typography variant="caption">
-                            {formatDate(pet.scheduleDate)}
-                          </Typography>
-                        )}
-                      </Box>
-                    ))}
-                  </TableCell>
-                  <TableCell>
-                    {client.pets.filter(p => p.serviceType === "Plano Mensal").length > 0 ? (
-                      client.pets.filter(p => p.serviceType === "Plano Mensal").map(pet => (
-                        <Box key={pet.id} sx={{ mb: 1 }}>
-                          <Chip
-                            label={`${pet.monthlyBathsRemaining || 0} banhos restantes`}
-                            color={pet.monthlyBathsRemaining > 0 ? "primary" : "warning"}
-                            variant="outlined"
-                            size="small"
-                          />
-                          {pet.lastRenewalDate && (
-                            <Typography variant="caption" display="block">
-                              Última renovação: {formatDate(pet.lastRenewalDate, 'dd/MM/yyyy')}
-                            </Typography>
-                          )}
-                        </Box>
-                      ))
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">
-                        Nenhum plano ativo
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {client.pets.some(p => p.serviceType === "Plano Mensal") && (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => handleOpenRenewDialog(client)}
-                      >
-                        Renovar Plano
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </TabPanel>
+      {tabs.map((tab, index) => (
+        <TabPanel key={index} value={value} index={index}>
+          {tab.content}
+        </TabPanel>
+      ))}
 
       <Dialog open={renewDialogOpen} onClose={handleCloseRenewDialog}>
         <DialogTitle>Renovar Plano Mensal</DialogTitle>
@@ -285,7 +467,7 @@ const MainTabs = () => {
           <Button
             onClick={() => {
               handleCloseRenewDialog();
-              setValue(6)
+              setValue(tabs.findIndex(tab => tab.label === "Caixa"))
             }}
             variant="contained"
             color="primary"
@@ -294,92 +476,6 @@ const MainTabs = () => {
           </Button>
         </DialogActions>
       </Dialog>
-
-      <TabPanel value={value} index={3}>
-        {activePets.length > 0 ? (
-          activePets.map(pet => (
-            <ServiceFlow
-              key={pet.id}
-              pet={pet}
-              onNextStep={(petId, step) => updatePetProgress(petId, step)}
-              onComplete={completeService}
-            />
-          ))
-        ) : (
-          <Typography>Nenhum pet em serviço no momento</Typography>
-        )}
-      </TabPanel>
-
-      <TabPanel value={value} index={4}>
-        {finishedPets.length > 0 ? (
-          <Box>
-            <Typography variant="h4" gutterBottom>
-              Panorama de Serviços
-            </Typography>
-
-            {Object.entries(groupedFinishedPets).map(([serviceType, pets]) => (
-              <Box key={serviceType} sx={{ mb: 4 }}>
-                <Typography variant="h6" gutterBottom>
-                  {serviceType} ({pets.length})
-                </Typography>
-
-                {pets.map(pet => (
-                  <Paper key={pet.id} sx={{
-                    p: 2,
-                    mb: 2,
-                    borderLeft: '4px solid #439104',
-                    position: 'relative'
-                  }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Avatar sx={{
-                        bgcolor: '#439104',
-                        width: 40,
-                        height: 40,
-                        fontSize: 16,
-                        fontWeight: 'bold'
-                      }}>
-                        {pet.name.charAt(0)}
-                      </Avatar>
-                      <Box>
-                        <Typography variant="subtitle1" fontWeight="bold">
-                          {pet.name} ({pet.breed})
-                        </Typography>
-                        <Typography variant="body2">
-                          Dono: {pet.owner}
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    <Box sx={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1
-                    }}>
-                      <CheckCircleIcon sx={{ color: '#439104' }} />
-                      <Typography variant="caption" color="text.secondary">
-                        Finalizado
-                      </Typography>
-                    </Box>
-                  </Paper>
-                ))}
-              </Box>
-            ))}
-          </Box>
-        ) : (
-          <Typography>Nenhum serviço finalizado hoje</Typography>
-        )}
-      </TabPanel>
-
-      <TabPanel value={value} index={5}>
-        <Calendar />
-      </TabPanel>
-
-      <TabPanel value={value} index={6}>
-        <Cashier />
-      </TabPanel>
     </Box>
   );
 };
